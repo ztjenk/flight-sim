@@ -1,0 +1,45 @@
+# ---- Developer docs (internal roadmap + design notes; not shipped) ----
+dev_docs/
+
+# ---- Rust (graphics) ----
+graphics/target/
+target/
+
+# ---- Mesh source stash (each example ships its own meshes/ copy; this dir is
+#      the working stash and also holds private BIRE geometry) ----
+graphics/meshes/
+
+# ---- Controller maneuver scratch (local tuning/test CSVs, any controller) ----
+controllers/**/maneuvers/
+
+# ---- Fortran (physics, controllers) build artifacts ----
+**/obj/
+**/bin/
+*.o
+*.mod
+*.mod0
+*.smod
+*.exe
+
+# ---- Local working area: personal sim/controller/graphics configs + the full
+#      database set (includes private BIRE/RCBIRE thesis data). Anchored to the
+#      repo root so the curated examples/<name>/databases/ stay tracked. ----
+/input_files/
+/databases/
+
+# ---- Aero database binary cache (regenerated from the .csv source) ----
+*.dat
+
+# ---- Generated run outputs ----
+*_datalog.csv
+*_ekf.csv
+*_sensors.csv
+
+# ---- Python helper caches ----
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# ---- OS / editor junk ----
+.DS_Store
+*.swp

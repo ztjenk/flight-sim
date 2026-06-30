@@ -1,0 +1,51 @@
+[package]
+name = "flightsim_graphics"
+version = "0.2.0"
+edition = "2021"
+description = "Flight Simulator graphics engine using wgpu for BC texture support"
+
+[dependencies]
+# Core rendering
+wgpu = "27"
+winit = "0.30.13"
+pollster = "0.4"
+bytemuck = { version = "1.18", features = ["derive"] }
+
+# Math
+nalgebra = "0.33"
+glam = "0.29"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Binary parsing
+byteorder = "1.5"
+
+# GUI
+egui = "0.33"
+egui-wgpu = "0.33"
+egui-winit = { version = "0.33", default-features = false, features = ["links", "wayland", "x11"] }
+
+# Ordered collections
+indexmap = { version = "2", features = ["serde"] }
+
+# Utilities
+lazy_static = "1.5"
+crossbeam-channel = "0.5"
+arc-swap = "1"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Gamepad support
+gilrs = "0.11.1"
+
+# Fast debug builds - disable optimizations for quick iteration
+[profile.dev]
+opt-level = 2
+
+# Keep release optimized for when you need performance
+[profile.release]
+opt-level = 3

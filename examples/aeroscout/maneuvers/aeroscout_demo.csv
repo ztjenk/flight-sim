@@ -1,0 +1,21 @@
+# Aeroscout demonstration maneuver (~60 s) for the cascaded PID controller.
+# Flown in ALTITUDE mode with velocity + sideslip hold (see controller_aeroscout.json):
+#   bank phi -> roll, altitude h -> pitch, airspeed V -> throttle, beta held at 0.
+# Trim reference (sim_aeroscout.json): V = 50 ft/s, h = 5000 ft.
+#
+# Sequence: settle -> 100 ft climb -> small bank right -> bank left -> wings level -> descend back.
+# The inner-rate columns (p/q/r) are unused in altitude mode but kept for format compatibility.
+#
+# Units: time[s], p[deg/s], q[deg/s], r[deg/s], V[ft/s], phi[deg], h[ft], beta[deg]
+time_s,p_cmd_dps,q_cmd_dps,r_cmd_dps,V_cmd_fps,phi_cmd_deg,h_cmd_ft,beta_cmd_deg
+0.0,    0.0, 0.0, 0.0, 50.0,   0.0, 5000.0, 0.0
+5.0,    0.0, 0.0, 0.0, 50.0,   0.0, 5000.0, 0.0
+10.0,   0.0, 0.0, 0.0, 50.0,   0.0, 5100.0, 0.0
+18.0,   0.0, 0.0, 0.0, 50.0,   0.0, 5100.0, 0.0
+20.0,   0.0, 0.0, 0.0, 50.0,  15.0, 5100.0, 0.0
+30.0,   0.0, 0.0, 0.0, 50.0,  15.0, 5100.0, 0.0
+32.0,   0.0, 0.0, 0.0, 50.0, -15.0, 5100.0, 0.0
+42.0,   0.0, 0.0, 0.0, 50.0, -15.0, 5100.0, 0.0
+44.0,   0.0, 0.0, 0.0, 50.0,   0.0, 5100.0, 0.0
+50.0,   0.0, 0.0, 0.0, 50.0,   0.0, 5000.0, 0.0
+60.0,   0.0, 0.0, 0.0, 50.0,   0.0, 5000.0, 0.0

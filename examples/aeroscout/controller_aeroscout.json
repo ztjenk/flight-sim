@@ -1,0 +1,56 @@
+{
+  "_vehicle": "Aeroscout (RC) — use with src_PID (bin/PID). Gains tuned for the NAELL aero databases (CMA-tuned, 1st-order actuator model).",
+  "udp": {
+    "listen_host": "0.0.0.0",
+    "listen_port": 5001,
+    "send_host": "127.0.0.1",
+    "send_port": 5002,
+    "precision": "double",
+        "entity_tagged": false,
+        "entity_tagged_notes": "true only for multi-vehicle; MUST match the physics connection entity_tagged. flight-sim examples use false.",
+    "packet_order": [
+      "t", "ub", "vb", "wb", "pb", "qb", "rb",
+      "xf", "yf", "zf", "e0", "ex", "ey", "ez",
+      "skipthis", "skipthis", "skipthis", "skipthis",
+      "skipthis", "skipthis", "skipthis", "skipthis"
+    ]
+  },
+  "pilot_inputs": {
+    "enabled": true,
+    "type": "csv",
+    "csv_file": "maneuvers/aeroscout_demo.csv",
+    "listen_port": 6000,
+    "deadzone": 0.08
+  },
+  "modes": {
+    "initial_mode": "altitude",
+    "velocity_hold": true,
+    "sideslip_hold": true,
+    "send_port": 5003
+  },
+  "rate_limits": {
+    "p_cmd_max_dps": 120,
+    "q_cmd_max_dps": 30,
+    "r_cmd_max_dps": 15,
+    "phi_cmd_max_deg": 60,
+    "theta_cmd_max_deg": 20,
+    "beta_cmd_max_deg": 10
+  },
+  "gains": {
+    "alt_ref_ft": 5000,
+    "Vref_fps": 50,
+    "p": { "kp": -0.1023, "ki": -0.0904, "kd": -0.0, "tau_d": 0.05, "da_min_deg": -21.5, "da_max_deg": 21.5 },
+    "q": { "kp": -0.037, "ki": -0.61, "kd": -0.012, "tau_d": 0.05, "de_min_deg": -25, "de_max_deg": 25 },
+    "r": { "kp": -0.2014, "ki": -0.0762, "kd": -0.0144, "tau_d": 0.05, "dr_min_deg": -30, "dr_max_deg": 30 },
+    "throttle": { "kp": 1.0, "ki": 0.0, "kd": 0.0, "tau_d": 0.05, "th_min": 0.0, "th_max": 1.0 },
+    "bank": { "kp": 2.2, "ki": 0.0, "kd": 0.01 },
+    "pitch": { "kp": 1.1, "ki": 0.01, "kd": 0.05, "tau_d": 0.0, "_from": "altitude.kp_theta/ki_theta/kd_theta" },
+    "sideslip": { "kp": -5.1, "ki": 0.0, "kd": -0.3, "tau_beta": 0.05 },
+    "altitude": { "kp_h": 2.0, "ki_h": 0.001, "kd_h": 0.08, "theta_cmd_max_deg": 20.0 }
+  },
+  "control_values": {
+    "p_cmd[dps]": 0.0, "q_cmd[dps]": 0.0, "r_cmd[dps]": 0.0,
+    "V_cmd[ft/s]": { "initial": 50.0, "minimum": 30, "maximum": 100, "step size": 5 },
+    "phi_cmd[deg]": 0.0, "theta_cmd[deg]": 30.0, "beta_cmd[deg]": 0.0, "h_cmd[ft]": 5000
+  }
+}

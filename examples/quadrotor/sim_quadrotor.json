@@ -1,0 +1,469 @@
+{
+  "_comment": "Quadrotor example \u2014 a fully COMPONENT-BUILT vehicle. There is no vehicle-level 'mass' block: the total mass, CG, and inertia are assembled automatically from each part (4 electric rotors + a structural airframe + a discrete battery mass) via the parallel-axis theorem. It showcases electric propulsion with ONE shared battery feeding all four motors, multi-component mass assembly with propeller gyroscopics, bluff-body (simple-geometry) aero, and a full onboard sensor suite (IMU/GPS/barometer/magnetometer) fused by the EKF. The controller flies on the EKF-ESTIMATED state (data_type ekf_both) to demonstrate control under sensor uncertainty. Geometry/propulsion/inertia from Phillips 'Simulation of Flight' Appendix C.4 (Tables C.4.1-C.4.3) and the electric motor/battery from Example 4.6.1. To fly it, run the quad PID controller src_quadrotorPID (bin/quadPID) — see controllers/README.md; for a live closed loop set realtime=true so the physics does not outrun the 100 Hz controller.",
+  "simulation": {
+    "time_step[s]": 0.002,
+    "realtime": true,
+    "realtime_note": "false for CMA tuning (runs as fast as the lockstep allows). Set true to fly/view live.",
+    "end_time[s]": 600.0,
+    "end_time_note": "short per-run window for tuning; raise (e.g. 1000) for live flying.",
+    "save_states": true,
+    "save_states_rate[hz]": 100,
+    "geographic_model": "flat",
+    "print_states_rate[hz]": 0.2
+  },
+  "atmosphere": {
+    "constant_wind[ft/s]": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "constant_wind_note": "zeroed for deterministic CMA tuning; restore [2,0,0] for a realistic live run.",
+    "use_wmm": true,
+    "date": 2025.5
+  },
+  "vehicles": {
+    "Quadrotor": {
+      "note": "Phillips Appendix C.4 generic quadrotor, Sec 4.6 electric propulsion. X-configuration: rotor1 front-right, rotor2 back-right, rotor3 back-left, rotor4 front-left. No vehicle-level 'mass' block \u2014 mass/CG/inertia are built from the components below (assembled total ~5.0 lbf, Ixx=Iyy~0.0231, Izz~0.0392, matching Table C.4.3).",
+      "batteries": {
+        "main": {
+          "note": "ONE shared 6S1P pack feeding all four motors, specified the way the label reads: 6S, 22.2 V, 5000 mAh, 0.025 ohm (= Example 4.6.1's Eb0=22.2 V, Rb=0.025 ohm). The loader divides pack values down to per-cell by cells_series/cells_parallel. For an 8S pack set cells_series=8; for more capacity raise cells_parallel (capacity adds in parallel; voltage in series). Each rotor draws ~2 A at hover (~8 A total); 20C * 5 Ah = 100 A limit. (For a real discharge curve, use a per-cell 'cell' block with cell_voltage/cell_capacity/cell_resistance + EA/EB/EC instead.)",
+          "cells_series": 6,
+          "cells_parallel": 1,
+          "C_rating": 20.0,
+          "pack_voltage": 22.2,
+          "pack_capacity": 5000.0,
+          "pack_resistance": 0.025
+        }
+      },
+      "control_effectors": {
+        "rotor1": {
+          "dynamics_order": 0,
+          "magnitude_limits": [
+            0.0,
+            1.0
+          ]
+        },
+        "rotor2": {
+          "dynamics_order": 0,
+          "magnitude_limits": [
+            0.0,
+            1.0
+          ]
+        },
+        "rotor3": {
+          "dynamics_order": 0,
+          "magnitude_limits": [
+            0.0,
+            1.0
+          ]
+        },
+        "rotor4": {
+          "dynamics_order": 0,
+          "magnitude_limits": [
+            0.0,
+            1.0
+          ]
+        }
+      },
+      "force_sources": {
+        "rotor1": {
+          "type": "propulsion",
+          "propulsion_type": "propeller",
+          "effector": "rotor1",
+          "diameter[ft]": 1.25,
+          "rotation": "right",
+          "motor": {
+            "type": "electric",
+            "kV": 450.0,
+            "resistance": 0.12,
+            "no_load_current": 0.3,
+            "ESC_resistance": 0.01,
+            "Ic_max": 60.0,
+            "gearbox_ratio": 1.0,
+            "gearbox_efficiency": 1.0,
+            "battery": "main",
+            "J_limits": [
+              -0.5,
+              0.5
+            ]
+          },
+          "CT(J)": [
+            0.056,
+            -0.0704,
+            -0.1027
+          ],
+          "CPb(J)": [
+            0.0137,
+            0.0144,
+            -0.085
+          ],
+          "CNa(J)": [
+            0.0,
+            0.0036,
+            0.016,
+            0.0148
+          ],
+          "Cna(J)": [
+            0.0,
+            -0.0112,
+            0.0029,
+            0.005
+          ],
+          "location[ft]": [
+            1.0,
+            1.0,
+            -0.25
+          ],
+          "component_orientation[deg]": [
+            0,
+            90,
+            0
+          ],
+          "mass": {
+            "weight[lbf]": 0.0567,
+            "Ixx[slug-ft^2]": 9.5231e-05
+          }
+        },
+        "rotor2": {
+          "type": "propulsion",
+          "propulsion_type": "propeller",
+          "effector": "rotor2",
+          "diameter[ft]": 1.25,
+          "rotation": "left",
+          "motor": {
+            "type": "electric",
+            "kV": 450.0,
+            "resistance": 0.12,
+            "no_load_current": 0.3,
+            "ESC_resistance": 0.01,
+            "Ic_max": 60.0,
+            "gearbox_ratio": 1.0,
+            "gearbox_efficiency": 1.0,
+            "battery": "main",
+            "J_limits": [
+              -0.5,
+              0.5
+            ]
+          },
+          "CT(J)": [
+            0.056,
+            -0.0704,
+            -0.1027
+          ],
+          "CPb(J)": [
+            0.0137,
+            0.0144,
+            -0.085
+          ],
+          "CNa(J)": [
+            0.0,
+            0.0036,
+            0.016,
+            0.0148
+          ],
+          "Cna(J)": [
+            0.0,
+            -0.0112,
+            0.0029,
+            0.005
+          ],
+          "location[ft]": [
+            -1.0,
+            1.0,
+            -0.25
+          ],
+          "component_orientation[deg]": [
+            0,
+            90,
+            0
+          ],
+          "mass": {
+            "weight[lbf]": 0.0567,
+            "Ixx[slug-ft^2]": 9.5231e-05
+          }
+        },
+        "rotor3": {
+          "type": "propulsion",
+          "propulsion_type": "propeller",
+          "effector": "rotor3",
+          "diameter[ft]": 1.25,
+          "rotation": "right",
+          "motor": {
+            "type": "electric",
+            "kV": 450.0,
+            "resistance": 0.12,
+            "no_load_current": 0.3,
+            "ESC_resistance": 0.01,
+            "Ic_max": 60.0,
+            "gearbox_ratio": 1.0,
+            "gearbox_efficiency": 1.0,
+            "battery": "main",
+            "J_limits": [
+              -0.5,
+              0.5
+            ]
+          },
+          "CT(J)": [
+            0.056,
+            -0.0704,
+            -0.1027
+          ],
+          "CPb(J)": [
+            0.0137,
+            0.0144,
+            -0.085
+          ],
+          "CNa(J)": [
+            0.0,
+            0.0036,
+            0.016,
+            0.0148
+          ],
+          "Cna(J)": [
+            0.0,
+            -0.0112,
+            0.0029,
+            0.005
+          ],
+          "location[ft]": [
+            -1.0,
+            -1.0,
+            -0.25
+          ],
+          "component_orientation[deg]": [
+            0,
+            90,
+            0
+          ],
+          "mass": {
+            "weight[lbf]": 0.0567,
+            "Ixx[slug-ft^2]": 9.5231e-05
+          }
+        },
+        "rotor4": {
+          "type": "propulsion",
+          "propulsion_type": "propeller",
+          "effector": "rotor4",
+          "diameter[ft]": 1.25,
+          "rotation": "left",
+          "motor": {
+            "type": "electric",
+            "kV": 450.0,
+            "resistance": 0.12,
+            "no_load_current": 0.3,
+            "ESC_resistance": 0.01,
+            "Ic_max": 60.0,
+            "gearbox_ratio": 1.0,
+            "gearbox_efficiency": 1.0,
+            "battery": "main",
+            "J_limits": [
+              -0.5,
+              0.5
+            ]
+          },
+          "CT(J)": [
+            0.056,
+            -0.0704,
+            -0.1027
+          ],
+          "CPb(J)": [
+            0.0137,
+            0.0144,
+            -0.085
+          ],
+          "CNa(J)": [
+            0.0,
+            0.0036,
+            0.016,
+            0.0148
+          ],
+          "Cna(J)": [
+            0.0,
+            -0.0112,
+            0.0029,
+            0.005
+          ],
+          "location[ft]": [
+            1.0,
+            -1.0,
+            -0.25
+          ],
+          "component_orientation[deg]": [
+            0,
+            90,
+            0
+          ],
+          "mass": {
+            "weight[lbf]": 0.0567,
+            "Ixx[slug-ft^2]": 9.5231e-05
+          }
+        },
+        "airframe": {
+          "note": "central body: bluff-body drag AND the structural mass (frame + arms + ESCs + avionics). The 1x1x0.5 ft cuboid is the aero reference; the mass block carries the structural inertia (perimeter-weighted, slightly higher than a uniform solid of the same mass as real X-frames are). Weight = 5.0 total - 4 rotors - battery = 3.8732 lbf.",
+          "type": "cuboid",
+          "reference": {
+            "dimensions[ft]": [
+              1.0,
+              1.0,
+              0.5
+            ]
+          },
+          "mass": {
+            "weight[lbf]": 3.8732,
+            "Ixx[slug-ft^2]": 0.0154,
+            "Iyy[slug-ft^2]": 0.0154,
+            "Izz[slug-ft^2]": 0.0246
+          }
+        },
+        "battery_mass": {
+          "note": "the shared battery modeled as a discrete inert mass (type 'point_mass'): mass + location required, inertia optional. Mounted just below the CG. This is the new generic mass element \u2014 reuse it for any payload/ballast.",
+          "type": "point_mass",
+          "location[ft]": [
+            0.0,
+            0.0,
+            0.05
+          ],
+          "mass": {
+            "weight[lbf]": 0.9,
+            "Ixx[slug-ft^2]": 0.000101,
+            "Iyy[slug-ft^2]": 0.000319,
+            "Izz[slug-ft^2]": 0.000353
+          }
+        }
+      },
+      "sensors": {
+        "save_outputs": true,
+        "imu_main": {
+          "note": "consumer-grade MEMS IMU (accel + gyro + magnetometer)",
+          "type": "imu",
+          "location[ft]": [
+            0.0,
+            0.0,
+            -0.1
+          ],
+          "attitude[deg]": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "refresh_rate[hz]": 500,
+          "noise_std": [
+            0.08,
+            0.08,
+            0.08,
+            0.003,
+            0.003,
+            0.003,
+            300.0,
+            300.0,
+            300.0
+          ],
+          "noise_std_notes": "accel ~2.5 mg, gyro ~0.17 deg/s, mag ~300 nT (hobby MEMS). magnetometer field from WMM (atmosphere.use_wmm)."
+        },
+        "gps": {
+          "note": "consumer GPS module",
+          "type": "gps",
+          "refresh_rate[hz]": 10,
+          "noise_std": [
+            3.0,
+            3.0,
+            5.0,
+            0.3,
+            0.3,
+            0.4
+          ],
+          "noise_std_notes": "position 3 ft horiz / 5 ft vert; velocity 0.3 ft/s horiz / 0.4 vert; 10 Hz"
+        },
+        "baro": {
+          "note": "barometric altimeter / pitot-static (static pressure -> altitude). Airspeed ~0 at hover.",
+          "type": "air_data_system",
+          "refresh_rate[hz]": 100,
+          "noise_std": [
+            1.0,
+            1.0,
+            0.1,
+            0.5,
+            0.5,
+            0.5
+          ],
+          "noise_std_notes": "P0/Pinf ~1 psf, Tinf 0.1 R, airspeeds 0.5 ft/s"
+        },
+        "ekf": {
+          "enabled": true,
+          "save_output": true,
+          "note": "15-state EKF fusing IMU/GPS/baro/mag; noise params approximate the sensor noise above",
+          "gyro_noise": 0.003,
+          "accel_noise": 0.08,
+          "gyro_bias_walk": 0.0001,
+          "accel_bias_walk": 0.001,
+          "gps_position_noise": 3.0,
+          "gps_velocity_noise": 0.3,
+          "mag_heading_noise": 0.1,
+          "airspeed_noise": 2.0
+        }
+      },
+      "initial": {
+        "airspeed[ft/s]": 0.0,
+        "altitude[ft]": 5000,
+        "latitude[deg]": 41.74,
+        "longitude[deg]": -111.81,
+        "Euler_angles[deg]": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "type": "state",
+        "state": {
+          "angle_of_attack[deg]": 0.0,
+          "sideslip_angle[deg]": 0.0,
+          "note_hover": "rotor throttle ~0.46 hovers (Phillips Ex 4.6.1: 4 x 1.25 lbf ~ weight). The controller holds this; this is just the initial guess.",
+          "control_effectors": {
+            "rotor1": 0.46,
+            "rotor2": 0.46,
+            "rotor3": 0.46,
+            "rotor4": 0.46
+          }
+        }
+      }
+    }
+  },
+  "connections": {
+    "graphics_send": {
+      "note": "TRUE state to graphics (so you see ground truth)",
+      "enabled": true,
+      "channel_type": "udp",
+      "vehicle": "Quadrotor",
+      "type": "send",
+      "data_type": "both",
+      "IP_address": "127.0.0.1",
+      "port_ID": 5005,
+      "double_precision": false,
+      "refresh_rate": 100
+    },
+    "controller_send": {
+      "note": "EKF-ESTIMATED state to the controller (data_type ekf_both) \u2014 the controller flies on the estimate, demonstrating control under sensor uncertainty",
+      "enabled": true,
+      "channel_type": "udp",
+      "vehicle": "Quadrotor",
+      "type": "send",
+      "data_type": "ekf_both",
+      "IP_address": "127.0.0.1",
+      "port_ID": 5001,
+      "double_precision": false,
+      "entity_tagged": false,
+      "refresh_rate": 1000
+    },
+    "controller_receive": {
+      "note": "receive the 4 rotor commands from the quad controller (plain packets, no entity-id prefix)",
+      "enabled": true,
+      "channel_type": "udp",
+      "vehicle": "Quadrotor",
+      "type": "receive",
+      "data_type": "controls",
+      "port_ID": 5002,
+      "double_precision": false,
+      "entity_tagged": false,
+      "wait_for_input": true
+    }
+  }
+}

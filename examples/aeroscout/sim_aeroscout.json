@@ -1,0 +1,237 @@
+{
+  "simulation": {
+    "time_step[s]": 0.01,
+    "realtime": true,
+    "end_time[s]": 60,
+    "rk4_verbose": false,
+    "save_states": true,
+    "geographic_model": "sphere",
+    "geographic_model_modes": "flat, sphere, or ellipse. flat is default",
+    "print_states_rate[hz]": 0.2
+  },
+  "atmosphere": {
+    "constant_wind[ft/s]": [
+      0.0,
+      0.0,
+      0.0
+    ]
+  },
+  "vehicles": {
+    "Aeroscout": {
+      "run_physics": true,
+      "mass": {
+        "weight[lbf]": 2.114,
+        "Ixx[slug-ft^2]": 0.0178,
+        "Iyy[slug-ft^2]": 0.0178,
+        "Izz[slug-ft^2]": 0.0301,
+        "Ixy[slug-ft^2]": 0.0,
+        "Ixz[slug-ft^2]": 0.0012,
+        "Iyz[slug-ft^2]": 0.0,
+        "h[slug-ft^2/s]": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "control_effectors": {
+        "aileron": {
+          "dynamics_order": 1,
+          "magnitude_limits[deg]": [
+            -8,
+            8
+          ],
+          "time_constant[s]": 0.05,
+          "rate_limits[deg/s]": [
+            -80.0,
+            80.0
+          ]
+        },
+        "elevator": {
+          "dynamics_order": 1,
+          "magnitude_limits[deg]": [
+            -6.0,
+            6.0
+          ],
+          "time_constant[s]": 0.05,
+          "rate_limits[deg/s]": [
+            -60.0,
+            60.0
+          ]
+        },
+        "rudder": {
+          "dynamics_order": 1,
+          "magnitude_limits[deg]": [
+            -10.0,
+            10.0
+          ],
+          "time_constant[s]": 0.05,
+          "rate_limits[deg/s]": [
+            -120.0,
+            120.0
+          ]
+        },
+        "throttle": {
+          "dynamics_order": 1,
+          "magnitude_limits": [
+            0.0,
+            1.0
+          ],
+          "rate_limits[/s]": [
+            -100.0,
+            100.0
+          ],
+          "time_constant[s]": 0.1
+        }
+      },
+      "force_sources": {
+        "aerodynamics": {
+          "type": "database",
+          "files": [
+            "Aeroscout_base_database.csv",
+            "Aeroscout_aileron_database.csv",
+            "Aeroscout_elevator_database.csv",
+            "Aeroscout_rudder_database.csv",
+            "Aeroscout_pbar_database.csv",
+            "Aeroscout_qbar_database.csv",
+            "Aeroscout_rbar_database.csv"
+          ],
+          "database_directory": "databases/Aeroscout/",
+          "saturate": true,
+          "presorted": true,
+          "reference": {
+            "area[ft^2]": 2.265625,
+            "longitudinal_length[ft]": 0.6259,
+            "lateral_length[ft]": 3.625
+          }
+        },
+        "engine": {
+          "type": "propulsion",
+          "propulsion_type": "simple",
+          "effector": "throttle",
+          "T0[lbf]": 1.0,
+          "Ta": 0.84,
+          "location[ft]": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "orientation[deg]": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "payload_drop": {
+          "use_source": false,
+          "note":"propulsion type and T0 set to zero so it just acts as a point mass",
+          "type": "propulsion",
+          "propulsion_type": "simple",
+          "effector": "throttle",
+          "T0[lbf]": 0.0,
+          "Ta": 1.0,
+          "location[ft]": [-2.0, 0.0, 1.0],
+          "orientation[deg]": [0.0, 0.0, 0.0],
+          "mass": {
+            "steps" : {
+              "weight[lbf]": {
+                "before":1.0,
+                "after":0,
+                "independent_variable":"time",
+                "trigger_value": 20
+              }
+            },
+            "cg[ft]": [0.0, 0.0, 0.0],
+            "note":"cg location of this coordinate frame",
+            "Ixx[slug-ft^2]": 0.05,
+            "Iyy[slug-ft^2]": 0.05,
+            "Izz[slug-ft^2]": 0.05
+          }
+        }
+      },
+      "initial": {
+        "airspeed[ft/s]": 50,
+        "altitude[ft]": 5000,
+        "latitude[deg]": 0,
+        "longitude[deg]": 0,
+        "Euler_angles[deg]": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "type": "trim",
+        "state": {
+          "angle_of_attack[deg]": 0.0,
+          "sideslip_angle[deg]": 0.0,
+          "p[deg/s]": 0.0,
+          "q[deg/s]": 0.0,
+          "r[deg/s]": 0.0,
+          "control_effectors": {
+            "aileron[deg]": 0.0,
+            "elevator[deg]": 0.0,
+            "rudder[deg]": 0.0,
+            "throttle": 0.5
+          }
+        },
+        "trim": {
+          "type": "sct",
+          "fixed_climb_angle[deg]": 0.0,
+          "climb_angle_notes": "doesn't account for wind. if provided, code solves for theta given climb angle",
+          "xsideslip_angle[deg]": -10.0,
+          "sideslip_angle_note": "if user wishes to solve shss with a given beta instead of given phi (comment out to solve for beta)",
+          "xload_factor": 1.2,
+          "loadfactornote": "used for sct if given. Finds phi to match load factor",
+          "vbr_pw[deg/s]": 30.0,
+          "vbr_direction": 1,
+          "vbr_note": "p_w used to specify roll rate in the wind axis. vbr_direction: 1: up, -1: down",
+          "solver": {
+            "finite_difference_step_size": 0.01,
+            "relaxation_factor": 0.7,
+            "tolerance": 1e-13,
+            "max_iterations": 2000,
+            "verbose": true
+          }
+        }
+      }
+    }
+  },
+  "connections": {
+    "graphics_send": {
+      "note": "channel to send aircraft state to graphics code",
+      "enabled": true,
+      "channel_type": "udp",
+      "vehicle": "Aeroscout",
+      "type": "send",
+      "IP_address": "127.0.0.1",
+      "port_ID": 5005,
+      "double_precision": false,
+      "refresh_rate": 100
+    },
+    "controller_send": {
+      "note": "channel to send aircraft state to controller code",
+      "enabled": true,
+      "channel_type": "udp",
+      "vehicle": "Aeroscout",
+      "type": "send",
+      "IP_address": "127.0.0.1",
+      "port_ID": 5001,
+      "double_precision": true,
+      "refresh_rate": 100,
+      "entity_tagged": false
+    },
+    "controller_receive": {
+      "note": "channel to receive commanded controls from controller code",
+      "enabled": true,
+      "channel_type": "udp",
+      "vehicle": "Aeroscout",
+      "type": "receive",
+      "IP_address": "127.0.0.1",
+      "data_type": "controls",
+      "port_ID": 5002,
+      "double_precision": true,
+      "wait_for_input": true,
+      "waitforinputnote": "true uses blocking (sim waits for controller), false uses nonblocking",
+      "refresh_rate": 100,
+      "entity_tagged": false
+    }
+  }
+}

@@ -1,0 +1,94 @@
+{
+    "_note": "Self-contained F-16 graphics config. rust_enabled=false on both: you launch the three processes yourself (see this example's README). Pilot commands come from an Xbox gamepad over UDP 6000; the controller is the dynamic-inversion controller (src_DI). Run graphics:  cd examples/f16_equations && ../../graphics/target/release/flightsim_graphics graphics_f16.json",
+    "camera": {
+        "view_plane": { "distance[ft]": 1.0, "angle[deg]": 60.0, "aspect_ratio": 2.0 },
+        "fix_to": "body",
+        "location[ft]": [-35.0, 0.0, -5.0],
+        "orientation[deg]": [0.0, -10.0, 0.0]
+    },
+    "ground": {
+        "mode": "grid",
+        "altitude[ft]": 0.0,
+        "grid_scale[ft]": 1000.0,
+        "color": "black",
+        "max_draw_distance[ft]": 40000
+    },
+    "vehicle": {
+        "stl_files": {
+            "main": { "is_main": true, "file": "meshes/F16/main.stl" },
+            "r_aileron": {
+                "file": "meshes/F16/raileron.stl", "control_surface": "da", "symmetric": false, "side": "right",
+                "connect_to": "main", "hinge_line": [0.1811, -0.9833, -0.0146], "hinge_point": [-6.2224, 5.3822, -0.23421]
+            },
+            "l_aileron": {
+                "file": "meshes/F16/laileron.stl", "control_surface": "da", "symmetric": false, "side": "left",
+                "connect_to": "main", "hinge_line": [-0.1859, -0.9825, 0.0146], "hinge_point": [-6.1024, -6.0766, -0.23435]
+            },
+            "l_hstab": {
+                "file": "meshes/F16/lhstab.stl", "control_surface": "de", "connect_to": "main",
+                "hinge_line": [0.0, 1.0, 0.0], "hinge_point": [-13.736, -3.5982, -0.31376]
+            },
+            "r_hstab": {
+                "file": "meshes/F16/rhstab.stl", "control_surface": "de", "connect_to": "main",
+                "hinge_line": [0.0, 1.0, 0.0], "hinge_point": [-13.736, -3.059, -0.31376]
+            },
+            "vstab": {
+                "file": "meshes/F16/vstab.stl", "control_surface": "dr", "connect_to": "main",
+                "hinge_line": [0.5007, 0.006, 0.8656], "hinge_point": [-15.199, -0.16816, -3.7414]
+            }
+        },
+        "control_surfaces": {
+            "order": [
+                "skipthis", "ub", "vb", "wb",
+                "skipthis", "skipthis", "skipthis",
+                "xf", "yf", "zf",
+                "e0", "ex", "ey", "ez",
+                "skipthis", "da", "skipthis", "de",
+                "skipthis", "dr", "skipthis", "skipthis"
+            ],
+            "note": "udp packet order received from physics (state + actual surface deflections da/de/dr)",
+            "precision": "single"
+        },
+        "control_surface_units": "radians",
+        "color": "orange",
+        "default_location[ft]": [0.0, 0.0, -5000.0],
+        "default_orientation[deg]": [0.0, 0.0, 0.0],
+        "scale": 1.0
+    },
+    "udp": {
+        "enable_udp": true,
+        "port_id": 5005,
+        "rust_enabled": false
+    },
+    "pilot_controls": {
+        "enable_pilot_cmd": true,
+        "udp_port_id": 6000,
+        "rate_hz": 100,
+        "rust_enabled": false
+    },
+    "background": { "color": "light_gray" },
+    "sky": {
+        "enabled": false,
+        "sun_direction": [0.0, 0.0, -1.0],
+        "sun_intensity": 30.0,
+        "sun_angular_radius_deg": 0.53,
+        "ground_albedo": 0.9,
+        "exposure": 3.0
+    },
+    "hud": {
+        "enable": true,
+        "color": "lime",
+        "opacity": 0.8,
+        "font_size": 16.0,
+        "udp_receive_controller_state": 5003,
+        "controller_status": {
+            "note": "matches the PID/DI controller HUD packet (16 doubles on port 5003)",
+            "cmd": ["p", "q", "r", "throttle", "bank", "pitch", "sideslip", "altitude"],
+            "cmd_raw_units": ["rad/s", "rad/s", "rad/s", "ft/s", "rad", "rad", "rad", "ft"],
+            "cmd_display_units": ["deg/s", "deg/s", "deg/s", "ft/s", "deg", "deg", "deg", "ft"],
+            "bool": [],
+            "order": ["p", "q", "r", "throttle", "bank", "pitch", "sideslip", "altitude", "p_cmd", "q_cmd", "r_cmd", "throttle_cmd", "bank_cmd", "pitch_cmd", "sideslip_cmd", "altitude_cmd"],
+            "precision": "double"
+        }
+    }
+}

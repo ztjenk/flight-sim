@@ -1,0 +1,96 @@
+{
+    "_note": "Self-contained Aeroscout graphics config. rust_enabled=true on BOTH udp (physics) and pilot_controls (controller), so just running graphics from this directory launches the whole demo: physics + the PID controller (which plays maneuvers/aeroscout_demo.csv). Run:  cd examples/aeroscout && ../../graphics/target/release/flightsim_graphics graphics_aeroscout.json",
+    "camera": {
+        "view_plane": { "distance[ft]": 1.0, "angle[deg]": 60.0, "aspect_ratio": 2.0 },
+        "fix_to": "body",
+        "location[ft]": [-4.0, 0.0, -1.0],
+        "orientation[deg]": [0.0, -15.0, 0.0]
+    },
+    "ground": {
+        "mode": "grid",
+        "altitude[ft]": 0.0,
+        "grid_scale[ft]": 500.0,
+        "color": "black",
+        "max_draw_distance[ft]": 20000
+    },
+    "vehicle": {
+        "stl_files": {
+            "main": { "is_main": true, "file": "meshes/Aeroscout/mainbody.stl" },
+            "r_aileron": {
+                "file": "meshes/Aeroscout/raileron.stl", "control_surface": "da", "symmetric": false, "side": "right",
+                "connect_to": "main", "hinge_line": [-0.02905, -0.99871, 0.04167], "hinge_point": [-0.27555, 0.49954, -0.54571]
+            },
+            "l_aileron": {
+                "file": "meshes/Aeroscout/laileron.stl", "control_surface": "da", "symmetric": false, "side": "left",
+                "connect_to": "main", "hinge_line": [0.02114, -0.99905, -0.03798], "hinge_point": [-0.2662, -0.49756, -0.55003]
+            },
+            "elevator": {
+                "file": "meshes/Aeroscout/elevator.stl", "control_surface": "de", "connect_to": "main",
+                "hinge_line": [0.0, 1.0, 0.0], "hinge_point": [-1.7, 0.0, -0.25]
+            },
+            "rudder": {
+                "file": "meshes/Aeroscout/rudder.stl", "control_surface": "dr", "connect_to": "main",
+                "hinge_line": [0.08444, 0.01, 0.99636], "hinge_point": [-1.74388, 0.01519, -0.74971]
+            }
+        },
+        "control_surfaces": {
+            "order": [
+                "skipthis", "ub", "vb", "wb",
+                "skipthis", "skipthis", "skipthis",
+                "xf", "yf", "zf",
+                "e0", "ex", "ey", "ez",
+                "skipthis", "da", "skipthis", "de",
+                "skipthis", "dr", "skipthis", "skipthis"
+            ],
+            "note": "udp packet order received from physics (state + actual surface deflections da/de/dr)",
+            "precision": "single"
+        },
+        "control_surface_units": "radians",
+        "color": "orange",
+        "default_location[ft]": [0.0, 0.0, -5000.0],
+        "default_orientation[deg]": [0.0, 0.0, 0.0],
+        "scale": 1.0
+    },
+    "udp": {
+        "enable_udp": true,
+        "port_id": 5005,
+        "rust_enabled": true,
+        "physics_exe": "../../physics/src/bin/flightsim",
+        "physics_json": "sim_aeroscout.json",
+        "physics_path": "."
+    },
+    "pilot_controls": {
+        "enable_pilot_cmd": false,
+        "udp_port_id": 6000,
+        "rate_hz": 100,
+        "rust_enabled": true,
+        "controller_exe": "../../controllers/src_PID/bin/PID",
+        "controller_json": "controller_aeroscout.json",
+        "controller_path": "."
+    },
+    "background": { "color": "light_gray" },
+    "sky": {
+        "enabled": false,
+        "sun_direction": [0.0, 0.0, -1.0],
+        "sun_intensity": 30.0,
+        "sun_angular_radius_deg": 0.53,
+        "ground_albedo": 0.9,
+        "exposure": 3.0
+    },
+    "hud": {
+        "enable": true,
+        "color": "lime",
+        "opacity": 0.8,
+        "font_size": 16.0,
+        "udp_receive_controller_state": 5003,
+        "controller_status": {
+            "note": "matches the PID/DI controller HUD packet (16 doubles on port 5003)",
+            "cmd": ["p", "q", "r", "throttle", "bank", "pitch", "sideslip", "altitude"],
+            "cmd_raw_units": ["rad/s", "rad/s", "rad/s", "ft/s", "rad", "rad", "rad", "ft"],
+            "cmd_display_units": ["deg/s", "deg/s", "deg/s", "ft/s", "deg", "deg", "deg", "ft"],
+            "bool": [],
+            "order": ["p", "q", "r", "throttle", "bank", "pitch", "sideslip", "altitude", "p_cmd", "q_cmd", "r_cmd", "throttle_cmd", "bank_cmd", "pitch_cmd", "sideslip_cmd", "altitude_cmd"],
+            "precision": "double"
+        }
+    }
+}

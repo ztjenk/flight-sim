@@ -1,0 +1,73 @@
+{
+  "_vehicle": "Quadrotor (Phillips App. C.4 electric quad) \u2014 use with src_quadrotorPID (bin/quadPID). Pairs with the flight-sim examples/quadrotor physics. Single-precision float32 UDP: receives the 21-field ekf_both state on 5001, sends 4 rotor throttles on 5002 (no entity id, matching the example's entity_tagged:false).",
+  "_status": "PROVISIONAL control law \u2014 builds and hovers/attitude-corrects in synthetic tests, but the gains, a_thrust, and kappa are first-guess values that still need TUNING against the sim. Not flight-validated.",
+  "udp": {
+    "listen_host": "0.0.0.0",
+    "listen_port": 5001,
+    "send_host": "127.0.0.1",
+    "send_port": 5002,
+    "precision": "single",
+    "packet_in_notes": "21 float32: t, u,v,w, p,q,r, x,y,z, e0,ex,ey,ez, rotor1..4, pdot,qdot,rdot (pdot/qdot/rdot unused by this PID law)",
+    "packet_out_notes": "4 float32 rotor throttles [0..1] in order rotor1,rotor2,rotor3,rotor4"
+  },
+  "pilot_inputs": {
+    "enabled": true,
+    "listen_port": 6000,
+    "deadzone": 0.08,
+    "mapping_notes": "left stick Y = climb rate, left stick X = yaw rate, right stick Y = pitch, right stick X = roll. No mode buttons (single control mode)."
+  },
+  "vehicle": {
+    "weight_lbf": 5.0,
+    "Ixx": 0.0231,
+    "Iyy": 0.0231,
+    "Izz": 0.0392,
+    "Ixx_notes": "matches the assembled inertia of examples/quadrotor (Phillips Table C.4.3)",
+    "kappa": 0.05,
+    "kappa_notes": "yaw reaction torque per unit rotor thrust [ft]; TUNE against the sim prop torque",
+    "a_thrust": 5.907,
+    "a_thrust_notes": "rotor thrust model f = a_thrust * throttle^2 [lbf]; chosen so 4 * a * 0.46^2 = 5 lbf hover (sim hover throttle ~0.46). TUNE to the sim's actual thrust curve.",
+    "f_max": 4.0
+  },
+  "gains": {
+    "att": {
+      "k_phi": 1.8976857641030773,
+      "k_theta": 14.962698250517514,
+      "_note": "attitude-angle P -> body-rate command [1/s]"
+    },
+    "rate": {
+      "p": {
+        "kp": 10.194529023895065,
+        "xki": 0.1897894618437356,
+        "ki":0.1,
+        "kd": 8.263363220245847e-05
+      },
+      "q": {
+        "kp": 8.438702251122729,
+        "xki": 2.270327362428633,
+        "ki":0.1,
+        "kd": 0.002559363456729987
+      },
+      "r": {
+        "kp": 6.971328588790245,
+        "ki": 0.015219900221354422,
+        "kd": 4.749855257127136e-05
+      },
+      "_note": "rate PID -> desired angular acceleration"
+    },
+    "nu_max": 60.0,
+    "climb": {
+      "kp": 2.1812612726417147,
+      "xki": 5.786652535103589,
+      "ki":0.5,
+      "az_max": 50.0,
+      "_note": "climb-rate PI -> vertical acceleration [ft/s^2] -> collective thrust"
+    }
+  },
+  "stick_limits": {
+    "hdot_max_fps": 20.0,
+    "yaw_rate_max_dps": 57.3,
+    "tilt_max_deg": 25.0,
+    "tilt_rate_max_dps": 60.0,
+    "tilt_rate_max_dps_note": "slew limit on bank/pitch command; releasing the stick eases back to level over ~tilt_max/tilt_rate seconds (25/60 ~ 0.42 s) instead of snapping the setpoint to zero. Lower = gentler."
+  }
+}
