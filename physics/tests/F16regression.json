@@ -1,0 +1,256 @@
+{
+  "_comment": "Regression fixture for the physics engine. Trims an F16 in steady level flight, exports the A/B state-space linearization, and runs a 2-step non-blocking sim. NO connections (so no UDP blocking), realtime off, save_states off. Keep deterministic: do not edit aero/trim without regenerating tests/golden/.",
+  "simulation": {
+    "time_step[s]": 0.01,
+    "end_time[s]": 0.02,
+    "rk4_verbose": false,
+    "save_states": false,
+    "realtime": false,
+    "geographic_model": "sphere",
+    "print_states_rate[hz]": 0
+  },
+  "atmosphere": {
+    "constant_wind[ft/s]": [
+      0.0,
+      0.0,
+      0.0
+    ]
+  },
+  "vehicles": {
+    "F16reg": {
+      "note": "regression trim: steady level flight (SLT), 1st-order actuator dynamics",
+      "run_physics": true,
+      "mass": {
+        "weight[lbf]": 20500.0,
+        "Ixx[slug-ft^2]": 9496.0,
+        "Iyy[slug-ft^2]": 55814.0,
+        "Izz[slug-ft^2]": 63100.0,
+        "Ixy[slug-ft^2]": 0.0,
+        "Ixz[slug-ft^2]": 982.0,
+        "Iyz[slug-ft^2]": 0.0,
+        "h[slug-ft^2/s]": [
+          160.0,
+          0.0,
+          0.0
+        ]
+      },
+      "control_effectors": {
+        "aileron": {
+          "dynamics_order": 1,
+          "magnitude_limits[deg]": [
+            -21.5,
+            21.5
+          ],
+          "time_constant[s]": 0.05,
+          "rate_limits[deg/s]": [
+            -80.0,
+            80.0
+          ],
+          "acceleration_limits[deg/s^2]": [
+            -1000.0,
+            1000.0
+          ]
+        },
+        "elevator": {
+          "dynamics_order": 1,
+          "magnitude_limits[deg]": [
+            -25.0,
+            25.0
+          ],
+          "time_constant[s]": 0.05,
+          "rate_limits[deg/s]": [
+            -80.0,
+            80.0
+          ],
+          "acceleration_limits[deg/s^2]": [
+            -1000.0,
+            1000.0
+          ]
+        },
+        "rudder": {
+          "dynamics_order": 1,
+          "magnitude_limits[deg]": [
+            -30.0,
+            30.0
+          ],
+          "time_constant[s]": 0.05,
+          "rate_limits[deg/s]": [
+            -80.0,
+            80.0
+          ],
+          "acceleration_limits[deg/s^2]": [
+            -1000.0,
+            1000.0
+          ]
+        },
+        "throttle": {
+          "dynamics_order": 1,
+          "magnitude_limits": [
+            0.0,
+            1.0
+          ],
+          "rate_limits[/s]": [
+            -1.0,
+            1.0
+          ],
+          "acceleration_limits[/s^2]": [
+            -1.0,
+            1.0
+          ],
+          "time_constant[s]": 3.0
+        }
+      },
+      "force_sources": {
+        "aerodynamics": {
+          "type": "stability_derivatives",
+          "reference": {
+            "area[ft^2]": 300.0,
+            "longitudinal_length[ft]": 11.32,
+            "lateral_length[ft]": 30.0,
+            "location[ft]": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "stall": {
+            "include_stall": true,
+            "CL": {
+              "alpha_0[deg]": 0.0,
+              "alpha_s[deg]": 43.0,
+              "lambda_b": 7.0
+            },
+            "CD": {
+              "alpha_0[deg]": 5.0,
+              "alpha_s[deg]": 45.0,
+              "lambda_b": 7.0
+            },
+            "Cm": {
+              "min": -0.6184,
+              "alpha_0[deg]": 20.0,
+              "alpha_s[deg]": 40.0,
+              "lambda_b": 6.0
+            }
+          },
+          "coefficients": {
+            "custom": {
+              "CL1": {
+                "0": 0.0535,
+                "alpha": 3.8459
+              }
+            },
+            "CL": {
+              "0": 0.0535,
+              "alpha": 3.8459,
+              "alphahat": 0.0,
+              "qbar": 29.5,
+              "elevator": 0.5153
+            },
+            "CS": {
+              "beta": -1.1086,
+              "pbar": -0.0207,
+              "alpha_pbar": 1.1566,
+              "rbar": 0.99,
+              "aileron": 0.0601,
+              "rudder": 0.1668
+            },
+            "CD": {
+              "0": 0.0425,
+              "CL1": -0.1154,
+              "CL1_CL1": 0.2427,
+              "CS_CS": 0.8733,
+              "qbar": -1.498,
+              "alpha_qbar": 22.99,
+              "elevator": -0.0006,
+              "alpha_elevator": 0.7084,
+              "elevator_elevator": 0.3251
+            },
+            "Cl": {
+              "beta": -0.1048,
+              "pbar": -0.3766,
+              "rbar": -0.0206,
+              "alpha_rbar": 1.0114,
+              "aileron": -0.1337,
+              "rudder": 0.0272
+            },
+            "Cm": {
+              "0": -0.0642,
+              "alpha": 0.0955,
+              "qbar": -5.5,
+              "alphahat": 0.0,
+              "elevator": -0.5926
+            },
+            "Cn": {
+              "beta": 0.2194,
+              "pbar": -0.0074,
+              "alpha_pbar": -0.0904,
+              "rbar": -0.4605,
+              "aileron": -0.0379,
+              "alpha_aileron": 0.0922,
+              "rudder": -0.0854
+            }
+          }
+        },
+        "engine": {
+          "type": "propulsion",
+          "propulsion_type": "simple",
+          "effector": "throttle",
+          "T0[lbf]": 29550,
+          "Ta": 0.84,
+          "location[ft]": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "orientation[deg]": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "analysis": {
+        "export_state_space": true,
+        "state_form": "euler",
+        "fd_step": 1e-5,
+        "output_prefix": "F16reg"
+      },
+      "initial": {
+        "airspeed[ft/s]": 500,
+        "altitude[ft]": 5000.0,
+        "latitude[deg]": 0,
+        "longitude[deg]": 0,
+        "Euler_angles[deg]": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "type": "trim",
+        "state": {
+          "angle_of_attack[deg]": 0.0,
+          "sideslip_angle[deg]": 0.0,
+          "p[deg/s]": 0.0,
+          "q[deg/s]": 0.0,
+          "r[deg/s]": 0.0,
+          "control_effectors": {
+            "aileron[deg]": 0.0,
+            "elevator[deg]": 0.0,
+            "rudder[deg]": 0.0,
+            "throttle": 0.0
+          }
+        },
+        "trim": {
+          "type": "sct",
+          "fixed_climb_angle[deg]": 0.0,
+          "solver": {
+            "finite_difference_step_size": 0.01,
+            "relaxation_factor": 0.9,
+            "tolerance": 1e-14,
+            "max_iterations": 2000,
+            "verbose": true
+          }
+        }
+      }
+    }
+  }
+}

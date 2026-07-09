@@ -9,7 +9,7 @@ use super::gpu_cache::{GpuTileCache, GpuMemoryConfig, TileMemoryInfo};
 use super::loader::{TileLoadRequest, TileLoadResult, TileLoadOutcome, TileLoader, MeshConfig, RegionalDemRef};
 use super::quadtree::{QuadtreeIndex, QuadtreeNode, Bounds};
 use super::tile::{GpuTile, TileKey};
-use super::visibility::ViewFrustum;
+use super::visibility::{ViewFrustum, FrustumResult};
 use super::terrain_config::{TerrainConfig, TileCandidate, LoadingTileInfo, LeafTileInfo};
 use super::utm::lat_lon_to_utm;
 
@@ -98,7 +98,12 @@ pub struct StreamingTerrainManager {
     last_cam_utm: Option<(f64, f64)>,
     last_cam_world: Option<[f64; 3]>,
     last_velocity_dir: Option<[f64; 2]>,
-    last_frustum: Option<ViewFrustum>,
+
+    /// Keys of cached tiles that survived render-time culling this frame (distance + 2D frustum).
+    /// Computed in `update_with_frustum`, consumed by `get_visible_tiles` at draw time. Populated
+    /// here (not during the render pass) so `last_used` can be refreshed on the drawn tiles while we
+    /// still hold `&mut self`.
+    visible_tile_keys: Vec<TileKey>,
 
     /// Reusable buffer for tile candidates (avoids per-frame allocations)
     candidate_buffer: Vec<TileCandidate>,
@@ -174,7 +179,7 @@ impl StreamingTerrainManager {
             last_cam_utm: None,
             last_cam_world: None,
             last_velocity_dir: None,
-            last_frustum: None,
+            visible_tile_keys: Vec::with_capacity(256),
             candidate_buffer: Vec::with_capacity(256), // Pre-allocate for reuse
             last_cache_log: Instant::now(),
             lod_distances_ft: Vec::new(),
@@ -573,7 +578,6 @@ impl StreamingTerrainManager {
             fov_y,
             max_dist,
         );
-        self.last_frustum = Some(frustum.clone());
 
         // === STEP 1: Calculate fresh priorities for all candidate tiles ===
         // Reuse the candidate buffer to avoid per-frame allocations
@@ -617,12 +621,47 @@ impl StreamingTerrainManager {
         // Take ownership of candidates to allow mutable access to self during iteration
         let candidates = std::mem::take(&mut self.candidate_buffer);
 
-        // === STEP 3: Update distances for loaded tiles ===
-        for tile in self.gpu_cache.values_mut() {
+        // === STEP 3: Update distances and compute the render-visible set ===
+        // Build a UTM-space frustum for render-time culling. The loading frustum (`frustum`) lives in
+        // world-feet space and is intentionally direction-agnostic/generous; this render frustum is in
+        // UTM meters so it can be tested directly against tile `dem_bounds`. Loading/eviction below
+        // still use the world-space frustum, so what we *draw* is culled without starving what we
+        // *load* (Struct1).
+        let render_forward_utm = velocity_dir.map(|[n, e]| [e, n]).unwrap_or([1.0, 0.0]);
+        let max_draw_m = self.config.max_draw_distance_ft * FT_TO_M;
+        let render_frustum = ViewFrustum::new_simple(
+            [cam_utm_x, cam_utm_y, 0.0],
+            render_forward_utm,
+            fov_y,
+            max_draw_m,
+        );
+
+        self.visible_tile_keys.clear();
+        let now = Instant::now();
+        for (key, tile) in self.gpu_cache.iter_mut() {
             let (cx, cy) = tile.dem_bounds.center();
             let distance_m = ((cam_utm_x - cx).powi(2) + (cam_utm_y - cy).powi(2)).sqrt();
             tile.distance_to_camera = (distance_m * M_TO_FT) as f32;
-            tile.last_used = Instant::now();
+
+            // (a) distance-only cull against max_draw_distance_ft (uses the distance just computed)
+            if tile.distance_to_camera as f64 > self.config.max_draw_distance_ft {
+                continue;
+            }
+
+            // (b) 2D frustum cull with a one-tile margin so a tile isn't popped the instant its
+            // center leaves the wedge.
+            let b = &tile.dem_bounds;
+            let tile_margin = (b.max_x - b.min_x).abs().max((b.max_y - b.min_y).abs());
+            if render_frustum.test_tile_2d(b.min_x, b.min_y, b.max_x, b.max_y, tile_margin)
+                == FrustumResult::Outside
+            {
+                continue;
+            }
+
+            // QW8: only refresh last_used for tiles actually drawn this frame, so the eviction age
+            // score reflects real visibility instead of being pinned to ~0 for every cached tile.
+            tile.last_used = now;
+            self.visible_tile_keys.push(key.clone());
         }
 
         // === STEP 4: Cancel irrelevant in-flight loads ===
@@ -1220,8 +1259,12 @@ impl StreamingTerrainManager {
         let _evicted = self.gpu_cache.evict_to_budget(cam_utm, velocity_dir, critical_radius_ft);
     }
 
+    /// Tiles to draw this frame: the render-culled set computed in `update_with_frustum`
+    /// (distance + 2D frustum). Falls back to nothing if the cache is somehow out of sync.
     pub fn get_visible_tiles(&self) -> impl Iterator<Item = &GpuTile> {
-        self.gpu_cache.values()
+        self.visible_tile_keys
+            .iter()
+            .filter_map(move |key| self.gpu_cache.get(key))
     }
 
     #[allow(dead_code)]
@@ -1292,4 +1335,42 @@ fn collect_leaf_tiles_recursive(node: &QuadtreeNode) -> Vec<LeafTileInfo> {
         }
     }
     tiles
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // The LOD mapping is the single source of truth shared by initial load and upgrade paths.
+    // A tile at exactly a threshold falls into the *coarser* tier (`<` comparison), and beyond the
+    // last threshold it clamps to the coarsest mip (thresholds.len() - 1).
+    #[test]
+    fn mip_for_distance_at_and_beyond_each_threshold() {
+        let thresholds = [5000.0, 10000.0, 20000.0, 50000.0];
+
+        // Just inside each band -> that band's mip index.
+        assert_eq!(StreamingTerrainManager::mip_for_distance(0.0, &thresholds), 0);
+        assert_eq!(StreamingTerrainManager::mip_for_distance(4999.0, &thresholds), 0);
+        assert_eq!(StreamingTerrainManager::mip_for_distance(5001.0, &thresholds), 1);
+        assert_eq!(StreamingTerrainManager::mip_for_distance(9999.0, &thresholds), 1);
+        assert_eq!(StreamingTerrainManager::mip_for_distance(10001.0, &thresholds), 2);
+        assert_eq!(StreamingTerrainManager::mip_for_distance(19999.0, &thresholds), 2);
+        assert_eq!(StreamingTerrainManager::mip_for_distance(20001.0, &thresholds), 3);
+        assert_eq!(StreamingTerrainManager::mip_for_distance(49999.0, &thresholds), 3);
+
+        // At a threshold exactly, `distance < threshold` is false -> next tier.
+        assert_eq!(StreamingTerrainManager::mip_for_distance(5000.0, &thresholds), 1);
+        assert_eq!(StreamingTerrainManager::mip_for_distance(10000.0, &thresholds), 2);
+        assert_eq!(StreamingTerrainManager::mip_for_distance(20000.0, &thresholds), 3);
+
+        // At/beyond the final threshold -> coarsest mip (clamped to len-1).
+        assert_eq!(StreamingTerrainManager::mip_for_distance(50000.0, &thresholds), 3);
+        assert_eq!(StreamingTerrainManager::mip_for_distance(1_000_000.0, &thresholds), 3);
+    }
+
+    #[test]
+    fn mip_for_distance_empty_thresholds_is_zero() {
+        // Degenerate: no thresholds -> saturating_sub keeps it at 0 (no panic).
+        assert_eq!(StreamingTerrainManager::mip_for_distance(1234.0, &[]), 0);
+    }
 }

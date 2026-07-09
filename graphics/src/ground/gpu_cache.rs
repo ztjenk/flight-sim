@@ -280,6 +280,11 @@ impl GpuTileCache {
         self.tiles.iter().map(|(k, c)| (k, &c.tile))
     }
 
+    /// Iterate over all key-tile pairs mutably
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = (&TileKey, &mut GpuTile)> {
+        self.tiles.iter_mut().map(|(k, c)| (k, &mut c.tile))
+    }
+
     /// Get eviction candidates sorted by priority (highest eviction score first)
     ///
     /// Returns tiles that should be evicted, excluding protected tiles.

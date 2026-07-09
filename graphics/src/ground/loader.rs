@@ -35,6 +35,8 @@ pub enum TileLoadError {
     DemOpen(String),
     /// DEM file had invalid header or data
     DemRead(String),
+    /// Imagery/texture file was truncated or otherwise corrupt (e.g. DDS mip offset out of range)
+    TextureData(String),
 }
 
 impl fmt::Display for TileLoadError {
@@ -44,6 +46,7 @@ impl fmt::Display for TileLoadError {
             TileLoadError::MetadataParse(e) => write!(f, "metadata parse: {}", e),
             TileLoadError::DemOpen(e) => write!(f, "DEM open: {}", e),
             TileLoadError::DemRead(e) => write!(f, "DEM read: {}", e),
+            TileLoadError::TextureData(e) => write!(f, "texture data: {}", e),
         }
     }
 }
@@ -58,6 +61,7 @@ impl TileLoadError {
             // Parse errors are permanent - file is corrupt
             TileLoadError::MetadataParse(_) => false,
             TileLoadError::DemRead(_) => false,
+            TileLoadError::TextureData(_) => false,
         }
     }
 }
@@ -381,8 +385,20 @@ fn load_imagery(
                     Ok((dds.data, dds.width as usize, dds.height as usize, dds.format, dds.mip_offsets))
                 } else if dds.format == BcFormat::Bc1 {
                     // CPU decompress BC1 when GPU doesn't support it
-                    let (offset, size) = dds.mip_offsets[0];
-                    let compressed = &dds.data[offset as usize..(offset as usize + size as usize)];
+                    let (offset, size) = *dds.mip_offsets.first().ok_or_else(|| {
+                        TileLoadError::TextureData("DDS has no mip offsets".to_string())
+                    })?;
+                    // Bounds-check the mip slice: a truncated DDS would otherwise panic here and
+                    // kill the worker thread. Report it as a (non-retryable) texture error instead.
+                    let start = offset as usize;
+                    let end = start + size as usize;
+                    if end > dds.data.len() {
+                        return Err(TileLoadError::TextureData(format!(
+                            "truncated DDS: mip slice {}..{} exceeds data length {}",
+                            start, end, dds.data.len()
+                        )));
+                    }
+                    let compressed = &dds.data[start..end];
                     let decompressed = decompress_bc1(compressed, dds.width as usize, dds.height as usize);
                     Ok((decompressed, dds.width as usize, dds.height as usize, BcFormat::None, vec![(0, dds.width * dds.height * 4)]))
                 } else {

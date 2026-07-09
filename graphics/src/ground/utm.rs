@@ -63,3 +63,41 @@ pub fn lat_lon_to_utm(lat: f64, lon: f64) -> (f64, f64, u32, bool) {
 
     (easting, northing, zone, northern)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Reference eastings/northings match the standard UTM (WGS84) transform used by pyproj
+    // (EPSG:326xx / 327xx) to ~1 m. Tolerance is 1 m; the series expansion is good to well under
+    // that at these latitudes.
+    fn assert_utm(lat: f64, lon: f64, e_exp: f64, n_exp: f64, zone_exp: u32, north_exp: bool) {
+        let (e, n, zone, north) = lat_lon_to_utm(lat, lon);
+        assert_eq!(zone, zone_exp, "zone for ({}, {})", lat, lon);
+        assert_eq!(north, north_exp, "hemisphere for ({}, {})", lat, lon);
+        assert!((e - e_exp).abs() < 1.0, "easting {} vs {}", e, e_exp);
+        assert!((n - n_exp).abs() < 1.0, "northing {} vs {}", n, n_exp);
+    }
+
+    #[test]
+    fn central_meridian_equator() {
+        // On the central meridian of zone 31 (lon 3°E) at the equator: E=500000, N=0.
+        assert_utm(0.0, 3.0, 500_000.0, 0.0, 31, true);
+    }
+
+    #[test]
+    fn paris_zone31_north() {
+        assert_utm(48.8566, 2.3522, 452_482.533, 5_411_717.177, 31, true);
+    }
+
+    #[test]
+    fn new_york_zone18_north() {
+        assert_utm(40.7128, -74.0060, 583_959.372, 4_507_350.998, 18, true);
+    }
+
+    #[test]
+    fn sydney_zone56_south() {
+        // Southern hemisphere: 10,000,000 m false-northing offset applied.
+        assert_utm(-33.8688, 151.2093, 334_368.634, 6_250_948.345, 56, false);
+    }
+}

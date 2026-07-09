@@ -174,7 +174,7 @@ contains
 
     subroutine sensor_update(s, velocity, omega, position, quaternion, &
                              F_total, M_total, I_inv, mass, &
-                             altitude, gust, mag_field, wind)
+                             altitude, gust, mag_field, wind, T_sl_R, P_sl_psf)
         type(sensor_t), intent(inout) :: s
         real, intent(in) :: velocity(3)    ! body-frame velocity [ft/s]
         real, intent(in) :: omega(3)       ! body-frame angular velocity [rad/s]
@@ -188,6 +188,8 @@ contains
         real, intent(in) :: gust(6)        ! [u,v,w,p,q,r] gust components
         real, intent(in) :: mag_field(3)   ! Earth-frame magnetic field [nT]
         real, intent(in) :: wind(3)        ! constant wind [N, E, D] in Earth frame [ft/s]
+        real, intent(in), optional :: T_sl_R    ! sea-level temperature [Rankine] (non-standard day)
+        real, intent(in), optional :: P_sl_psf  ! sea-level pressure [psf] (non-standard day)
 
         select case (s%type_id)
         case (SENSOR_GYROSCOPE)
@@ -197,7 +199,7 @@ contains
         case (SENSOR_IMU)
             call update_imu(s, omega, F_total, M_total, I_inv, mass, quaternion, mag_field)
         case (SENSOR_ADS)
-            call update_ads(s, velocity, altitude, gust)
+            call update_ads(s, velocity, altitude, gust, T_sl_R, P_sl_psf)
         case (SENSOR_GPS)
             call update_gps(s, position, velocity, quaternion, wind)
         case (SENSOR_AERO_ANGLES)
@@ -282,14 +284,17 @@ contains
 
     ! Air Data System: pitot-static chain (Eq 10.4.1-10.4.7)
     ! outputs: [P0, P_inf, T_inf, V_IAS, V_CAS, V_EAS] in English units
-    subroutine update_ads(s, velocity, altitude, gust)
+    subroutine update_ads(s, velocity, altitude, gust, T_sl_R, P_sl_psf)
         type(sensor_t), intent(inout) :: s
         real, intent(in) :: velocity(3), altitude
         real, intent(in) :: gust(6)
+        real, intent(in), optional :: T_sl_R    ! sea-level temperature [Rankine] (non-standard day)
+        real, intent(in), optional :: P_sl_psf  ! sea-level pressure [psf] (non-standard day)
         real :: u_air, v_air, w_air, V_inf
         real :: Z, T_inf, P_inf, rho_inf, a_sound, mu_atm
         real :: P0, delta_P, V_IAS, V_EAS
         real :: gm1, gm1_over_g, g_over_gm1, pressure_ratio
+        real :: T_sl_use, P_sl_use
 
         ! air-relative velocity (what the pitot tube sees)
         u_air = velocity(1) + gust(1)
@@ -297,8 +302,17 @@ contains
         w_air = velocity(3) + gust(3)
         V_inf = sqrt(u_air*u_air + v_air*v_air + w_air*w_air)
 
-        ! atmosphere at altitude
-        call std_atm_english(altitude, Z, T_inf, P_inf, rho_inf, a_sound, mu_atm)
+        ! atmosphere at altitude (honor non-standard-day sea-level overrides so
+        ! the ADS readout matches the air the vehicle actually flies through)
+        T_sl_use = 0.0; P_sl_use = 0.0
+        if (present(T_sl_R)) T_sl_use = T_sl_R
+        if (present(P_sl_psf)) P_sl_use = P_sl_psf
+        if (T_sl_use > 0.0 .or. P_sl_use > 0.0) then
+            call std_atm_english(altitude, Z, T_inf, P_inf, rho_inf, a_sound, mu_atm, &
+                                 T_sl_use, P_sl_use)
+        else
+            call std_atm_english(altitude, Z, T_inf, P_inf, rho_inf, a_sound, mu_atm)
+        end if
 
         ! precompute gamma ratios
         gm1 = GAMMA_AIR - 1.0           ! 0.4

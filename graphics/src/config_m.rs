@@ -777,8 +777,26 @@ pub struct ControllerStatusConfig {
 
 fn default_precision() -> Precision { Precision::Double }
 
-/// Valid unit keywords for controller values
-const VALID_UNITS: &[&str] = &["rad/s", "deg/s", "ft/s", "m/s", "rad", "deg", "m", "ft"];
+/// Valid unit keywords for controller values, grouped by physical dimension.
+/// `unit_conversion_factor` only knows how to convert *within* a group; a cross-group pair
+/// (e.g. "rad" -> "ft") would silently fall through to its `_ => 1.0` arm, so `validate()`
+/// rejects any raw/display pair whose dimensions differ (see `unit_dimension`).
+const VALID_UNIT_GROUPS: &[&[&str]] = &[
+    &["rad/s", "deg/s"], // angular rate
+    &["ft/s", "m/s"],    // linear velocity
+    &["rad", "deg"],     // angle
+    &["m", "ft"],        // length
+];
+
+/// Return the dimension group index for a unit, or `None` if the unit is unknown.
+fn unit_dimension(unit: &str) -> Option<usize> {
+    VALID_UNIT_GROUPS.iter().position(|group| group.contains(&unit))
+}
+
+/// Flat list of every valid unit keyword (derived from the grouped table).
+fn valid_units() -> Vec<&'static str> {
+    VALID_UNIT_GROUPS.iter().flat_map(|g| g.iter().copied()).collect()
+}
 
 impl ControllerStatusConfig {
     /// Validate the controller status configuration
@@ -801,20 +819,30 @@ impl ControllerStatusConfig {
             ));
         }
 
-        // Validate all units are valid keywords
+        // Validate all units are valid keywords, and that each raw/display pair shares a dimension
+        // (so `unit_conversion_factor` never silently returns 1.0 for a rad->ft-style mismatch).
         for (i, unit) in self.cmd_raw_units.iter().enumerate() {
-            if !VALID_UNITS.contains(&unit.as_str()) {
+            if unit_dimension(unit).is_none() {
                 return Err(format!(
                     "Invalid cmd_raw_units[{}]: '{}'. Valid units: {:?}",
-                    i, unit, VALID_UNITS
+                    i, unit, valid_units()
                 ));
             }
         }
         for (i, unit) in self.cmd_display_units.iter().enumerate() {
-            if !VALID_UNITS.contains(&unit.as_str()) {
+            if unit_dimension(unit).is_none() {
                 return Err(format!(
                     "Invalid cmd_display_units[{}]: '{}'. Valid units: {:?}",
-                    i, unit, VALID_UNITS
+                    i, unit, valid_units()
+                ));
+            }
+        }
+        for (i, (raw, display)) in self.cmd_raw_units.iter().zip(&self.cmd_display_units).enumerate() {
+            if unit_dimension(raw) != unit_dimension(display) {
+                return Err(format!(
+                    "Unit dimension mismatch at index {}: raw '{}' and display '{}' measure different \
+                    quantities; conversion is undefined",
+                    i, raw, display
                 ));
             }
         }
@@ -990,6 +1018,11 @@ pub fn parse_color(c: &str, default_alpha: f32) -> Result<[f32; 4], String> {
 
     // try to parse as hex color
     if let Some(h) = s.strip_prefix('#') {
+        // Guard against non-ASCII input: the `&h[a..b]` slices below index by byte, so a pasted
+        // Unicode character (multi-byte) would panic on a non-char-boundary slice. Reject up front.
+        if !h.is_ascii() {
+            return Err(format!("Invalid hex color '{}': non-ASCII characters", c));
+        }
         // helper closure to convert a 2-character hex string to a float 0.0-1.0
         let hex_to_f32 = |hex: &str| -> Result<f32, String> {
             u8::from_str_radix(hex, 16)              // parse hex string as u8 (0-255)
@@ -1227,5 +1260,120 @@ impl Config {
         } else {
             (None, None, None)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ---- parse_color ----
+
+    #[test]
+    fn parse_color_named() {
+        let c = parse_color("lime", 0.8).unwrap();
+        assert_eq!(c[3], 0.8, "alpha should be the passed default");
+    }
+
+    #[test]
+    fn parse_color_hex6_and_hex8() {
+        let rgb = parse_color("#ff8000", 0.5).unwrap();
+        assert!((rgb[0] - 1.0).abs() < 1e-6);
+        assert!((rgb[1] - 128.0 / 255.0).abs() < 1e-6);
+        assert!((rgb[2] - 0.0).abs() < 1e-6);
+        assert_eq!(rgb[3], 0.5);
+
+        let rgba = parse_color("#00ff0080", 0.9).unwrap();
+        assert!((rgba[3] - 128.0 / 255.0).abs() < 1e-6, "explicit alpha overrides default");
+    }
+
+    #[test]
+    fn parse_color_bad_length_is_err() {
+        assert!(parse_color("#fff", 1.0).is_err());
+        assert!(parse_color("notacolor", 1.0).is_err());
+    }
+
+    #[test]
+    fn parse_color_non_ascii_is_err_not_panic() {
+        // QW5: a pasted multi-byte character must return Err, never panic on a byte-slice boundary.
+        assert!(parse_color("#ff×00", 1.0).is_err());
+        assert!(parse_color("#日本語色", 1.0).is_err());
+    }
+
+    // ---- ControlSurfacesConfig::validate ----
+
+    fn state_order() -> Vec<String> {
+        ["ub", "vb", "wb", "xf", "yf", "zf", "e0", "ex", "ey", "ez"]
+            .iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn control_surfaces_validate_ok() {
+        let mut order = state_order();
+        order.push("da".to_string());
+        let cfg = ControlSurfacesConfig { order, precision: Precision::Single };
+        assert!(cfg.validate(&["da".to_string()]).is_ok());
+    }
+
+    #[test]
+    fn control_surfaces_validate_missing_keyword() {
+        let mut order = state_order();
+        order.pop(); // drop "ez"
+        let cfg = ControlSurfacesConfig { order, precision: Precision::Single };
+        assert!(cfg.validate(&[]).is_err());
+    }
+
+    #[test]
+    fn control_surfaces_validate_unknown_item_and_duplicate() {
+        // Unknown control surface not present in stl list.
+        let mut order = state_order();
+        order.push("bogus".to_string());
+        let cfg = ControlSurfacesConfig { order, precision: Precision::Single };
+        assert!(cfg.validate(&[]).is_err());
+
+        // Duplicate state keyword.
+        let mut order = state_order();
+        order.push("ub".to_string());
+        let cfg = ControlSurfacesConfig { order, precision: Precision::Single };
+        assert!(cfg.validate(&[]).is_err());
+    }
+
+    // ---- ControllerStatusConfig::validate (unit-dimension grouping, QW5) ----
+
+    fn controller_cfg(raw: &str, disp: &str) -> ControllerStatusConfig {
+        ControllerStatusConfig {
+            cmd: vec!["p".to_string()],
+            bool_controllers: vec![],
+            order: vec!["p".to_string(), "p_cmd".to_string()],
+            cmd_raw_units: vec![raw.to_string()],
+            cmd_display_units: vec![disp.to_string()],
+            precision: Precision::Double,
+        }
+    }
+
+    #[test]
+    fn controller_validate_same_dimension_ok() {
+        assert!(controller_cfg("rad/s", "deg/s").validate().is_ok());
+        assert!(controller_cfg("rad", "deg").validate().is_ok());
+        assert!(controller_cfg("m", "ft").validate().is_ok());
+    }
+
+    #[test]
+    fn controller_validate_rejects_cross_dimension() {
+        // rad -> ft would silently convert by 1.0; validate() must reject it (QW5).
+        assert!(controller_cfg("rad", "ft").validate().is_err());
+        assert!(controller_cfg("m/s", "deg").validate().is_err());
+    }
+
+    #[test]
+    fn controller_validate_rejects_unknown_unit() {
+        assert!(controller_cfg("furlongs", "ft").validate().is_err());
+    }
+
+    #[test]
+    fn unit_conversion_factor_within_dimension() {
+        let dpr = 180.0 / std::f64::consts::PI;
+        assert!((unit_conversion_factor("rad", "deg") - dpr).abs() < 1e-9);
+        assert!((unit_conversion_factor("ft", "ft") - 1.0).abs() < 1e-12);
     }
 }

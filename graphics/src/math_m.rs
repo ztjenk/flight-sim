@@ -133,3 +133,80 @@ pub fn body_to_earth_velocity(v_body: &Vector3<f64>, q: [f64; 4]) -> Vector3<f64
     let r_be = quat_to_matrix(q);
     r_be.transpose() * v_body
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const TOL: f64 = 1e-9;
+
+    fn deg(d: f64) -> f64 {
+        d.to_radians()
+    }
+
+    // Published 3-2-1 (yaw-pitch-roll) earth-to-body DCM for phi=30°, theta=-20°, psi=45°.
+    // Computed independently (numpy) from R = Rx(phi)·Ry(theta)·Rz(psi) in the same row-major
+    // layout nalgebra::Matrix3::new uses. This pins get_r's convention.
+    #[test]
+    fn get_r_matches_published_321_dcm() {
+        let e = [deg(30.0), deg(-20.0), deg(45.0)];
+        let r = get_r(e[0], e[1], e[2]);
+        let expected = [
+            [0.664463024, 0.664463024, 0.342020143],
+            [-0.733294817, 0.491450054, 0.469846310],
+            [0.144109682, -0.562997099, 0.813797681],
+        ];
+        for i in 0..3 {
+            for j in 0..3 {
+                assert!(
+                    (r[(i, j)] - expected[i][j]).abs() < 1e-8,
+                    "R[{},{}] = {}, expected {}",
+                    i, j, r[(i, j)], expected[i][j]
+                );
+            }
+        }
+    }
+
+    // euler_to_quat then quat_to_matrix must reproduce the same 3-2-1 DCM as get_r.
+    #[test]
+    fn quat_matrix_agrees_with_get_r() {
+        for e in [
+            [deg(30.0), deg(-20.0), deg(45.0)],
+            [deg(-15.0), deg(60.0), deg(-120.0)],
+            [deg(0.0), deg(0.0), deg(0.0)],
+        ] {
+            let r_direct = get_r(e[0], e[1], e[2]);
+            let r_via_quat = quat_to_matrix(euler_to_quat(e));
+            let diff = (r_direct - r_via_quat).abs().max();
+            assert!(diff < TOL, "DCM mismatch for {:?}: max diff {}", e, diff);
+        }
+    }
+
+    // quat <-> euler round-trip recovers the original angles (away from gimbal lock).
+    #[test]
+    fn quat_euler_round_trip() {
+        for e in [
+            [deg(30.0), deg(-20.0), deg(45.0)],
+            [deg(-15.0), deg(60.0), deg(-120.0)],
+            [deg(5.0), deg(-85.0), deg(10.0)],
+        ] {
+            let back = quat_to_euler(euler_to_quat(e));
+            for k in 0..3 {
+                assert!(
+                    (back[k] - e[k]).abs() < 1e-9,
+                    "angle {} round-trip: got {}, expected {}",
+                    k, back[k], e[k]
+                );
+            }
+        }
+    }
+
+    // At the gimbal-lock pole (theta = +90°) the asin path is clamped and must not NaN.
+    #[test]
+    fn quat_euler_gimbal_lock_is_finite() {
+        let e = [deg(0.0), deg(90.0), deg(30.0)];
+        let back = quat_to_euler(euler_to_quat(e));
+        assert!(back.iter().all(|a| a.is_finite()));
+        assert!((back[1] - std::f64::consts::FRAC_PI_2).abs() < 1e-6);
+    }
+}

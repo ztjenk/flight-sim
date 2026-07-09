@@ -42,13 +42,13 @@ mod subprocess_m;       // managing child processes (threads) (physics, controll
 mod ground;             // terrain rendering (streaming tiles, grid)
 mod sky;                // atmospheric sky rendering
 
-use constants_m::{SPEED_OF_SOUND_SEA_LEVEL_FT_S, FT_TO_M};
+use constants_m::FT_TO_M;
 use config_m::Config;
 use renderer::WgpuRenderer;
 use ground::{StreamingTerrainManager, TerrainConfig, GroundGrid};
 use camera_m::{CameraCache, CameraController, CameraMode, CameraState};
 use vehicle_m::Vehicle;
-use hud_m::{Hud, HudConfig, HudState};
+use hud_m::{Hud, HudConfig};
 use udp_m::{UdpStateReceiver, ControllerStateReceiver};
 use subprocess_m::SubprocessManager;
 use pilot_controls_m::GamepadController;
@@ -757,53 +757,16 @@ impl AppState {
             Some(msl_altitude - self.ground_altitude as f32)
         };
 
-        let mach = (v_mag / SPEED_OF_SOUND_SEA_LEVEL_FT_S) as f32;  // calculate Mach number (currently just using sea level sos)
-
-        // compute HUD marker positions by projecting directions into camera frame
-        // R_cam transforms earth-frame vectors to camera frame [forward, right, down]
-        let r_cam = &camera_state.rotation;
-        let r_be = math_m::quat_to_matrix(q);  // earth-to-body rotation
-
-        // project a direction (earth frame) into screen offset angles [x_deg, y_deg]
-        // x positive = right on screen, y positive = down on screen
-        let project_to_screen = |dir_earth: &Vector3<f64>| -> [f32; 2] {
-            let d_cam = r_cam * dir_earth;
-            let x_deg = d_cam.y.atan2(d_cam.x).to_degrees() as f32;
-            let y_deg = d_cam.z.atan2(d_cam.x).to_degrees() as f32;
-            [x_deg, y_deg]
-        };
-
-        // nose direction in earth frame = R_eb * [1,0,0] = first column of R_be^T
-        let r_eb = r_be.transpose();
-        let nose_earth = Vector3::new(r_eb[(0,0)], r_eb[(1,0)], r_eb[(2,0)]);
-        let nose_offset_deg = project_to_screen(&nose_earth);
-
-        // velocity direction in earth frame
-        let fpv_offset_deg = if v_mag > 10.0 {
-            let v_earth = r_be.transpose() * v_b;
-            project_to_screen(&(v_earth / v_mag))
-        } else {
-            nose_offset_deg  // at low speed, FPV defaults to nose direction
-        };
-
-        // extract camera roll and pitch from R_cam for the pitch ladder
-        // R_cam row 0 is camera forward in earth frame; R_cam[0,2] = forward dot earth_down = -sin(camera_pitch)
-        let camera_pitch_deg = (-r_cam[(0,2)]).asin().to_degrees() as f32;
-        // camera roll: atan2(right·down, up_cam·down) where up_cam is -row2
-        let camera_roll_deg = r_cam[(1,2)].atan2(r_cam[(2,2)]).to_degrees() as f32;
-
-        // package HUD state
-        let hud_state = HudState {
-            velocity_magnitude: v_mag as f32,
-            altitude: msl_altitude,
+        // package HUD state — all the projection/pitch-ladder math lives in one testable place
+        // (hud_m::compute_hud_state), extracted from this 400-line fn per Struct3.
+        let hud_state = hud_m::compute_hud_state(
+            &camera_state.rotation,
+            q,
+            &v_b,
+            v_mag,
+            msl_altitude,
             agl,
-            mach,
-            heading_deg: vehicle_euler[2].to_degrees() as f32,
-            camera_roll_deg,
-            camera_pitch_deg,
-            nose_offset_deg,
-            fpv_offset_deg,
-        };
+        );
 
         // get controller state for HUD display
         let controller_state = self.controller_receiver
@@ -866,22 +829,10 @@ impl AppState {
                 sky.get_sun_direction(),
             );
 
-            // Update sky camera with current view rotation
-            // Must match the view matrix construction in build_uniform (using look_to_rh)
-            let r_cam_world = camera_state.rotation.transpose();
-            let (forward, up) = math_m::rotation_to_forward_up(&r_cam_world);
-
-            // Build view axes (same as look_to_rh internally does)
-            let z_axis = -forward.normalize();  // camera looks down -Z
-            let x_axis = up.cross(z_axis).normalize();  // right
-            let y_axis = z_axis.cross(x_axis);  // up in camera space
-
-            // Inverse view rotation: columns are the camera axes in world space
-            let inv_view_rotation: [[f32; 3]; 3] = [
-                [x_axis.x, x_axis.y, x_axis.z],  // column 0: right axis
-                [y_axis.x, y_axis.y, y_axis.z],  // column 1: up axis
-                [z_axis.x, z_axis.y, z_axis.z],  // column 2: -forward axis
-            ];
+            // Update sky camera with current view rotation. Derived from the SAME axis basis as the
+            // world view matrix (camera_m::build_uniform) via the shared inv_view_rotation() helper,
+            // so the sky can never drift out of alignment with the rendered scene.
+            let inv_view_rotation = camera_m::inv_view_rotation(&camera_state);
 
             let (w, h) = self.renderer.context.size();
             let aspect_ratio = w as f32 / h as f32;

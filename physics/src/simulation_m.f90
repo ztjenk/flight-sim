@@ -1132,7 +1132,14 @@ contains
             write(*,'(A,ES24.12,A)') '  Longitude:   ', self%states(i)%longitude * RAD2DEG, ' deg'
 
             alt_print = -self%states(i)%position(3)
-            call std_atm_english(alt_print, Z_atm, T_atm, P_atm, rho_print, a_snd, mu_atm)
+            ! honor non-standard-day sea-level overrides so the printed density
+            ! matches the air the vehicle actually flies through (Fix4)
+            if (self%dynamics(i)%T_sl_R > 0.0 .or. self%dynamics(i)%P_sl_psf > 0.0) then
+                call std_atm_english(alt_print, Z_atm, T_atm, P_atm, rho_print, a_snd, mu_atm, &
+                                     self%dynamics(i)%T_sl_R, self%dynamics(i)%P_sl_psf)
+            else
+                call std_atm_english(alt_print, Z_atm, T_atm, P_atm, rho_print, a_snd, mu_atm)
+            end if
             write(*,'(A,ES24.12,A)') '  Rho:         ', rho_print, ' slug/ft^3'
 
             call compute_display_coefficients(self%configs(i), self%controls(i), &
@@ -1354,7 +1361,8 @@ contains
                     -self%states(i)%position(3), &
                     self%dynamics(i)%gust, &
                     mag_use, &
-                    self%dynamics(i)%wind)
+                    self%dynamics(i)%wind, &
+                    self%dynamics(i)%T_sl_R, self%dynamics(i)%P_sl_psf)
                 end associate
             end do
         end do

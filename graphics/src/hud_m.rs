@@ -71,6 +71,77 @@ pub struct HudState {
     pub fpv_offset_deg: [f32; 2],   // [x, y] offset of FPV from screen center in degrees
 }
 
+/// Compute the HUD display state from raw flight quantities.
+///
+/// Pure function (no GPU / egui state) so it can be unit-tested. Projects the nose and
+/// flight-path-vector directions into the camera frame, extracts camera pitch/roll for the pitch
+/// ladder, and packages the tape readouts. Extracted from `update_and_render` so the "must match"
+/// projection math lives in exactly one, testable place.
+///
+/// * `camera_rotation` — R_cam, earth->camera-frame rotation (camera frame = [forward, right, down])
+/// * `q` — vehicle quaternion [w, x, y, z] (earth-to-body, R_be)
+/// * `v_b` — body-frame velocity, `v_mag` — its magnitude (ft/s)
+/// * `msl_altitude` — MSL altitude (ft), `agl` — above-ground-level (ft) or None
+pub fn compute_hud_state(
+    camera_rotation: &nalgebra::Matrix3<f64>,
+    q: [f64; 4],
+    v_b: &nalgebra::Vector3<f64>,
+    v_mag: f64,
+    msl_altitude: f32,
+    agl: Option<f32>,
+) -> HudState {
+    use nalgebra::Vector3;
+
+    let mach = (v_mag / crate::constants_m::SPEED_OF_SOUND_SEA_LEVEL_FT_S) as f32;
+
+    // R_cam transforms earth-frame vectors to camera frame [forward, right, down]
+    let r_cam = camera_rotation;
+    let r_be = crate::math_m::quat_to_matrix(q); // earth-to-body rotation
+
+    // project a direction (earth frame) into screen offset angles [x_deg, y_deg]
+    // x positive = right on screen, y positive = down on screen
+    let project_to_screen = |dir_earth: &Vector3<f64>| -> [f32; 2] {
+        let d_cam = r_cam * dir_earth;
+        let x_deg = d_cam.y.atan2(d_cam.x).to_degrees() as f32;
+        let y_deg = d_cam.z.atan2(d_cam.x).to_degrees() as f32;
+        [x_deg, y_deg]
+    };
+
+    // nose direction in earth frame = R_eb * [1,0,0] = first column of R_be^T
+    let r_eb = r_be.transpose();
+    let nose_earth = Vector3::new(r_eb[(0, 0)], r_eb[(1, 0)], r_eb[(2, 0)]);
+    let nose_offset_deg = project_to_screen(&nose_earth);
+
+    // velocity direction in earth frame
+    let fpv_offset_deg = if v_mag > 10.0 {
+        let v_earth = r_be.transpose() * v_b;
+        project_to_screen(&(v_earth / v_mag))
+    } else {
+        nose_offset_deg // at low speed, FPV defaults to nose direction
+    };
+
+    // extract camera roll and pitch from R_cam for the pitch ladder
+    // R_cam row 0 is camera forward in earth frame; R_cam[0,2] = forward dot earth_down = -sin(camera_pitch)
+    let camera_pitch_deg = (-r_cam[(0, 2)]).asin().to_degrees() as f32;
+    // camera roll: atan2(right·down, up_cam·down) where up_cam is -row2
+    let camera_roll_deg = r_cam[(1, 2)].atan2(r_cam[(2, 2)]).to_degrees() as f32;
+
+    // vehicle heading (yaw, psi) from the earth->body rotation
+    let heading_deg = crate::math_m::quat_to_euler(q)[2].to_degrees() as f32;
+
+    HudState {
+        velocity_magnitude: v_mag as f32,
+        altitude: msl_altitude,
+        agl,
+        mach,
+        heading_deg,
+        camera_roll_deg,
+        camera_pitch_deg,
+        nose_offset_deg,
+        fpv_offset_deg,
+    }
+}
+
 // cached layout positions to avoid recomputation each frame
 struct HudLayoutCache {
     screen_center_x: f32,
@@ -825,4 +896,60 @@ pub fn draw_start_overlay(ctx: &Context) {
         FontId::proportional(24.0),
         Color32::WHITE,
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use nalgebra::{Matrix3, Vector3};
+
+    // Level camera aligned to the earth frame + nose along earth-X (identity quaternion):
+    // the nose reticle sits at screen center and the pitch ladder reads zero.
+    #[test]
+    fn compute_hud_state_level_identity() {
+        let r_cam = Matrix3::identity(); // earth == camera frame
+        let q = [1.0, 0.0, 0.0, 0.0]; // identity quaternion
+        let v_b = Vector3::new(500.0, 0.0, 0.0); // 500 ft/s forward
+        let v_mag = 500.0;
+
+        let hud = compute_hud_state(&r_cam, q, &v_b, v_mag, 10_000.0, Some(500.0));
+
+        assert!((hud.velocity_magnitude - 500.0).abs() < 1e-3);
+        assert!((hud.altitude - 10_000.0).abs() < 1e-3);
+        assert_eq!(hud.agl, Some(500.0));
+        // Mach at 500 ft/s vs sea-level speed of sound.
+        let expected_mach = 500.0 / crate::constants_m::SPEED_OF_SOUND_SEA_LEVEL_FT_S as f32;
+        assert!((hud.mach - expected_mach).abs() < 1e-4);
+
+        // Nose and FPV both at screen center; ladder level.
+        assert!(hud.nose_offset_deg[0].abs() < 1e-4);
+        assert!(hud.nose_offset_deg[1].abs() < 1e-4);
+        assert!(hud.fpv_offset_deg[0].abs() < 1e-4);
+        assert!(hud.camera_pitch_deg.abs() < 1e-4);
+        assert!(hud.camera_roll_deg.abs() < 1e-4);
+        assert!(hud.heading_deg.abs() < 1e-4);
+    }
+
+    // At low speed the FPV falls back to the nose direction (no divide-by-near-zero-speed).
+    #[test]
+    fn compute_hud_state_low_speed_fpv_defaults_to_nose() {
+        let r_cam = Matrix3::identity();
+        let q = crate::math_m::euler_to_quat([0.0, 0.0, 30f64.to_radians()]);
+        let v_b = Vector3::new(1.0, 0.0, 0.0);
+        let hud = compute_hud_state(&r_cam, q, &v_b, 1.0, 0.0, None);
+        assert_eq!(hud.fpv_offset_deg, hud.nose_offset_deg);
+        assert!(hud.fpv_offset_deg.iter().all(|v| v.is_finite()));
+    }
+
+    // A nose-right yaw shows up as a positive (right-of-center) nose offset.
+    #[test]
+    fn compute_hud_state_yaw_offsets_nose_right() {
+        let r_cam = Matrix3::identity();
+        let q = crate::math_m::euler_to_quat([0.0, 0.0, 20f64.to_radians()]); // yaw right 20°
+        let v_b = Vector3::new(500.0, 0.0, 0.0);
+        let hud = compute_hud_state(&r_cam, q, &v_b, 500.0, 0.0, None);
+        assert!(hud.nose_offset_deg[0] > 0.0, "nose should be right of center, got {}", hud.nose_offset_deg[0]);
+        assert!((hud.nose_offset_deg[0] - 20.0).abs() < 1e-3);
+        assert!((hud.heading_deg - 20.0).abs() < 1e-3);
+    }
 }

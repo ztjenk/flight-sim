@@ -216,6 +216,18 @@ contains
         logical, intent(in) :: do_saturate
         integer :: lo, hi, mid
 
+        ! single-breakpoint dimension: no interval to interpolate over, so
+        ! collapse the bracket onto the sole node (f=0). Guards against the
+        ! il=n-1=0 / ih=n+1=2 out-of-bounds indexing below when n==1.
+        if (n == 1) then
+            il = 1; ih = 1; f = 0.0
+            if (.not. do_saturate .and. abs(s - a(1)) > TOLERANCE) then
+                write(*,*) 'ERROR: Value off single-breakpoint table: ', s, ' /= ', a(1)
+                stop
+            end if
+            return
+        end if
+
         if (s <= a(1)) then
             il = 1; ih = 2; f = 0.0
             if (.not. do_saturate .and. s < a(1)) then

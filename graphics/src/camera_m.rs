@@ -63,10 +63,13 @@ pub struct CameraCache {
 
 impl CameraCache {
     pub fn new(distance_vp: f64, aspect_ratio_vp: f64, angle_vp_deg: f64, max_draw_distance: Option<f64>) -> Self {
-        // calculate view plane dimensions from field of view
-        let w_vp = 2.0 * distance_vp * angle_vp_deg.to_radians().tan();
-        let h_vp = w_vp / aspect_ratio_vp;
-        let fov_y_rad = 2.0 * (h_vp / (2.0 * distance_vp)).atan();
+        // `angle_vp_deg` is the vertical field of view (config_m::ViewPlane::angle_deg documents it
+        // as "vertical FOV"). QW6: the old formula treated it as a horizontal half-angle and
+        // re-derived fov_y through the view-plane width/aspect, which contradicted the config docs.
+        // Use it directly so code and documentation agree; aspect_ratio_vp is applied at
+        // projection time via the live viewport aspect in build_uniform.
+        let _ = aspect_ratio_vp;
+        let fov_y_rad = angle_vp_deg.to_radians();
 
         let near = (distance_vp * 0.5).max(1.0) as f32;
         let far = max_draw_distance.unwrap_or(DEFAULT_FAR_CLIP_FT) as f32;
@@ -205,11 +208,10 @@ impl CameraController {
         let (width, height) = viewport_size;
         let aspect = width as f32 / height as f32;
 
-        // extract forward and up from rotation matrix
-        let r_cam_world = state.rotation.transpose();
-        let (forward, up) = math_m::rotation_to_forward_up(&r_cam_world);
-
-        // build view matrix - camera at origin for camera-relative rendering
+        // build view matrix - camera at origin for camera-relative rendering.
+        // The view rotation is derived from the SAME axes as inv_view_rotation() (see below), so the
+        // sky/HUD and the world view can never drift apart.
+        let (forward, up) = view_forward_up(state);
         let view = Mat4::look_to_rh(Vec3::ZERO, forward, up);
         let proj = Mat4::perspective_rh(self.cache.fov_y_rad, aspect, self.cache.near, self.cache.far);
         let view_proj = proj * view;
@@ -227,5 +229,31 @@ impl CameraController {
 pub struct CameraState {
     pub rotation: Matrix3<f64>,
     pub position: Vector3<f64>,
+}
+
+/// Camera forward/up vectors (world space) for a given state.
+/// This is the single source the view matrix (`build_uniform`) and the inverse-view rotation
+/// (`inv_view_rotation`) both read from, so they cannot disagree.
+pub fn view_forward_up(state: &CameraState) -> (Vec3, Vec3) {
+    let r_cam_world = state.rotation.transpose();
+    math_m::rotation_to_forward_up(&r_cam_world)
+}
+
+/// Inverse view rotation matrix whose columns are the camera axes in world space
+/// (right, up, -forward). This reproduces the axis basis that `Mat4::look_to_rh` builds
+/// internally in `build_uniform`, so the sky/HUD shaders share ONE definition instead of the
+/// old "must match build_uniform" hand-copy in main.rs.
+pub fn inv_view_rotation(state: &CameraState) -> [[f32; 3]; 3] {
+    let (forward, up) = view_forward_up(state);
+
+    let z_axis = -forward.normalize(); // camera looks down -Z
+    let x_axis = up.cross(z_axis).normalize(); // right
+    let y_axis = z_axis.cross(x_axis); // up in camera space
+
+    [
+        [x_axis.x, x_axis.y, x_axis.z], // column 0: right axis
+        [y_axis.x, y_axis.y, y_axis.z], // column 1: up axis
+        [z_axis.x, z_axis.y, z_axis.z], // column 2: -forward axis
+    ]
 }
 
