@@ -95,6 +95,7 @@ contains
         if(geo_model_str == 'ellipse') sim_settings%geographic_model_ID = 2
         call jsonx_get_u(j_sim, 'print_states_rate', sim_settings%print_states_rate, 0.0)
         call jsonx_get_u(j_sim, 'save_states_rate', sim_settings%save_states_rate, 0.0)
+        call jsonx_get_u(j_sim, 'hold_time', sim_settings%hold_time, 0.0)
 
         ! backward compat: time_step[s]=0.0 triggers real-time mode with default dt
         if (sim_settings%dt <= 1.0e-13 .and. .not. sim_settings%realtime) then

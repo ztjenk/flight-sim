@@ -75,6 +75,7 @@ module simulation_m
         real :: dt = 0.01
         real :: t_final = 10.0
         real :: t_current = 0.0
+        real :: hold_time = 0.0   ! rigid-body states frozen until this sim time [s]; actuators/PEs still integrate
 
         logical :: realtime_mode = .false.
         real :: time_scale = 1.0
@@ -260,7 +261,7 @@ contains
     subroutine sim_init(self, n_vehicles, configs, controls, passives, states, dt, t_final, &
                         save_states, rk4_verbose, json_root, geographic_model_ID, &
                         print_states_rate, wind, realtime, time_scale, turb_config, save_states_rate, &
-                        T_sl_R, P_sl_psf, eqsets, use_wmm, date)
+                        T_sl_R, P_sl_psf, eqsets, use_wmm, date, hold_time)
         class(simulator_t), intent(inout) :: self
         integer, intent(in) :: n_vehicles
         type(vehicle_config_t), intent(in) :: configs(:)
@@ -283,6 +284,7 @@ contains
         type(equation_set_t), intent(in), optional :: eqsets(:)
         logical, intent(in), optional :: use_wmm
         real, intent(in), optional :: date
+        real, intent(in), optional :: hold_time
 
         integer :: i, j, n_conn, n_max
         real :: dx_ff_init, sigma_init, V_init
@@ -312,6 +314,9 @@ contains
         ! World Magnetic Model settings
         if (present(use_wmm)) self%use_wmm = use_wmm
         if (present(date)) self%date = date
+
+        ! ground-hold / frozen-state phase
+        if (present(hold_time)) self%hold_time = hold_time
 
         ! print states settings
         if (present(print_states_rate)) then
@@ -620,6 +625,11 @@ contains
 
         integer :: i, j, n
         real :: V_air, dx_ff, sigma_now
+        logical :: holding
+
+        ! hold phase: any step that starts before hold_time keeps the rigid-body states frozen
+        ! while actuator and passive-effector states integrate normally (see dynamics_step_rk4)
+        holding = self%t_current + TOLERANCE < self%hold_time
 
         ! evaluate equations (dynamic values: sines, polynomials)
         do i = 1, self%n_vehicles
@@ -728,9 +738,11 @@ contains
             call pack_passive_states(self%passives(i), self%y_work)
 
             if (self%rk4_verbose) then
-                self%y_new_work(1:n) = self%dynamics(i)%step_rk4(self%t_current, self%y_work(1:n), dt, self%rk4_units(i))
+                self%y_new_work(1:n) = self%dynamics(i)%step_rk4(self%t_current, self%y_work(1:n), dt, &
+                                                                 self%rk4_units(i), hold_rigid=holding)
             else
-                self%y_new_work(1:n) = self%dynamics(i)%step_rk4(self%t_current, self%y_work(1:n), dt)
+                self%y_new_work(1:n) = self%dynamics(i)%step_rk4(self%t_current, self%y_work(1:n), dt, &
+                                                                 hold_rigid=holding)
             end if
 
             ! update geographic coordinates if not using flat earth
@@ -747,6 +759,16 @@ contains
             ! unpack: actuator states back to effector values
             call unpack_actuator_states(self%y_new_work, self%controls(i), self%act_maps(i))
             call unpack_passive_states(self%y_new_work, self%passives(i))
+
+            ! while held, the vehicle is externally restrained: the restraint reaction cancels
+            ! aero/thrust and gravity, so the net non-gravitational force the IMU feels is
+            ! -m*g (earth frame), not the free-flight aero sum cached by the derivatives
+            if (holding) then
+                self%dynamics(i)%F_total_cache = quat_rotate_inertial_to_body( &
+                    [0.0, 0.0, -gravity_english(-self%states(i)%position(3)) * self%configs(i)%mass%mass], &
+                    self%states(i)%quaternion)
+                self%dynamics(i)%M_total_cache = 0.0
+            end if
 
             if (norm2(self%states(i)%omega) / (2.0*PI) * dt > 0.1) write(*,*) 'Warning: High Vehicle Rotation relative to integration time step. [abs(omega)/(2*PI)*dt > 0.1]'
 

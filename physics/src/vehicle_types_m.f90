@@ -202,6 +202,7 @@ module vehicle_types_m
         integer :: geographic_model_ID = 0
         real :: print_states_rate = 0.0   ! rate to print states to terminal [Hz], 0 = disabled
         real :: save_states_rate = 0.0   ! rate to save states to CSV [Hz], 0 = every timestep
+        real :: hold_time = 0.0   ! hold rigid-body states frozen until this sim time [s], 0 = disabled
     end type simulation_settings_t
 
     ! turbulence configuration (parsed from json "atmosphere.turbulence" section)

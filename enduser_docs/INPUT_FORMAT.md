@@ -303,7 +303,8 @@ This evaluates the sine in kg·m² and converts the result to slug·ft².
     "realtime"              : false,
     "geographic_model"      : "flat",
     "print_states_rate[hz]" : 0.0,
-    "save_states_rate[hz]"  : 0.0
+    "save_states_rate[hz]"  : 0.0,
+    "hold_time[s]"          : 0.0
 }
 ```
 
@@ -320,6 +321,7 @@ All real-valued keys support the unit-aware system (see [Unit System](#unit-syst
 | `geographic_model` | string | no | `"flat"` | `"flat"`, `"sphere"`, or `"ellipse"` |
 | `print_states_rate` | real | no | `0.0` | Console output rate. Default units: Hz. 0 = disabled. |
 | `save_states_rate` | real | no | `0.0` | CSV output rate. Default units: Hz. 0 = write every timestep. Non-zero values limit CSV write frequency (e.g., 100 Hz writes every 0.01s regardless of physics dt). Also controls sensor CSV write rate. |
+| `hold_time` | real | no | `0.0` | Hold phase: rigid-body states are frozen at their initial values until this sim time, while actuator and passive-effector states still integrate their full dynamics. Applies to all vehicles. 0 = disabled. Use for a ground hold before release (servos slew realistically to their commands) or to verify actuator dynamics in isolation at a frozen flight condition. While held, the IMU reads the restraint reaction (pure gravity), not the free-flight force sum. |
 
 **Override behavior:**
 - Setting `time_step[s]` to `0.0` auto-enables real-time mode with `dt = 0.01` (legacy compatibility). A console note is printed. Prefer explicitly setting `"realtime": true` with a nonzero time step.

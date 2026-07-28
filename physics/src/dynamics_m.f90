@@ -366,17 +366,27 @@ contains
     end function dynamics_derivatives
 
     ! RK4 integration step
-    function dynamics_step_rk4(self, t, y, dt, verbose_unit) result(y_new)
+    ! hold_rigid: freeze the rigid-body states (1:RIGID_DIM) at their current values while the
+    ! actuator and passive-effector states still integrate normally. Zeroing the rigid entries of
+    ! each k keeps every derivative evaluation at the frozen flight condition, so actuators slew
+    ! toward their commands with full first/second-order dynamics while the vehicle is restrained
+    ! (ground hold before release, or a frozen flight condition for actuator verification).
+    function dynamics_step_rk4(self, t, y, dt, verbose_unit, hold_rigid) result(y_new)
         class(dynamics_engine_t), intent(inout) :: self
         real, intent(in) :: t
         real, intent(in) :: y(:)
         real, intent(in) :: dt
         integer, intent(in), optional :: verbose_unit
+        logical, intent(in), optional :: hold_rigid
         real :: y_new(size(y))
 
         real :: k1(self%state_dim), k2(self%state_dim), k3(self%state_dim), &
                 k4(self%state_dim), y_temp(self%state_dim)
         integer :: n, k, eff_idx
+        logical :: hold
+
+        hold = .false.
+        if (present(hold_rigid)) hold = hold_rigid
 
         n = self%state_dim
 
@@ -389,18 +399,22 @@ contains
 
         ! k1 at t   -   eq 5.7.6
         k1 = self%compute_derivatives(t, y, verbose_unit, 1)
+        if (hold) k1(1:RIGID_DIM) = 0.0
 
         ! k2 at t + dt/2    -   eq 5.7.7
         y_temp = y + 0.5*dt*k1
         k2 = self%compute_derivatives(t + 0.5*dt, y_temp, verbose_unit, 2)
+        if (hold) k2(1:RIGID_DIM) = 0.0
 
         ! k3 at t + dt/2    -   eq 5.7.8
         y_temp = y + 0.5*dt*k2
         k3 = self%compute_derivatives(t + 0.5*dt, y_temp, verbose_unit, 3)
+        if (hold) k3(1:RIGID_DIM) = 0.0
 
         ! k4 at t + dt  -   eq 5.7.9
         y_temp = y + dt*k3
         k4 = self%compute_derivatives(t + dt, y_temp, verbose_unit, 4)
+        if (hold) k4(1:RIGID_DIM) = 0.0
 
         ! weighted average  -   eq 5.7.5
         y_new = y + (dt/6.0) * (k1 + 2.0*k2 + 2.0*k3 + k4)

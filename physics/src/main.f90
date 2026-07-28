@@ -186,6 +186,9 @@ program main
         write(*,*) '  RK4 verbose: ', sim_settings%rk4_verbose
         write(*,*) '  Geographic model: ', trim(sim_settings%geographic_model)
         write(*,*) '  Print states rate: ', sim_settings%print_states_rate, ' Hz'
+        if (sim_settings%hold_time > 0.0) then
+            write(*,*) '  Hold time: ', sim_settings%hold_time, ' s (rigid body frozen, actuators active)'
+        end if
         if (sim_settings%realtime) then
             if (abs(sim_settings%time_scale - 1.0) < 1.0e-6) then
                 write(*,*) '  Mode: Real-time'
@@ -202,7 +205,7 @@ program main
                             sim_settings%realtime, sim_settings%time_scale, &
                             atmo_settings%turbulence, sim_settings%save_states_rate, &
                             atmo_settings%T_sl_R, atmo_settings%P_sl_psf, eqsets, &
-                            atmo_settings%use_wmm, atmo_settings%date)
+                            atmo_settings%use_wmm, atmo_settings%date, sim_settings%hold_time)
 
         ! json root no longer needed after telemetry loading
         if (associated(json_root)) call json_destroy(json_root)
