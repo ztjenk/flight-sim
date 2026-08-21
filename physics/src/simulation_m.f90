@@ -856,6 +856,9 @@ contains
         do k = 1, passive%n
             passive%effectors(k)%value = y(passive%effectors(k)%state_index)
             passive%effectors(k)%rate_value = y(passive%effectors(k)%rate_state_index)
+            passive%effectors(k)%rate_var_value = &
+                (passive%effectors(k)%rate_value + dot3(y(4:6), passive%effectors(k)%hinge_axis)) &
+                * passive%effectors(k)%ref_length / max(2.0 * norm3(y(1:3)), 1.0e-8)
         end do
     end subroutine unpack_passive_states
 

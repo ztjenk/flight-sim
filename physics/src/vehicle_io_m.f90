@@ -2187,6 +2187,16 @@ contains
             ! optional: nondimensional rate flag (default true)
             call jsonx_get(j_pe, 'nondimensional_rate', passive%effectors(ie)%nondim_rate, .true.)
 
+            ! optional: hinge axis (body frame). if given, the rate variable is the effector absolute rotation rate:
+            ! theta_dot + dot(omega, axis). Omitted = relative rate
+            call jsonx_get(j_pe, 'hinge_axis', arr, 0.0, 3)
+            if (allocated(arr)) then
+                if (size(arr) == 3 .and. norm3(arr) > 0.0) then
+                    passive%effectors(ie)%hinge_axis = arr / norm3(arr)
+                end if
+                deallocate(arr)
+            end if
+
             write(*,*) '    Passive effector: ', trim(passive%effectors(ie)%name)
         end do
     end subroutine load_passive_effectors

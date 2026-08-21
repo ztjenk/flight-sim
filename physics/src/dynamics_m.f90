@@ -174,9 +174,10 @@ contains
         end do
 
         ! PE nondim rates from state vector
+        ! aero rate = theta_dot + omega. hinge_axis = 0 uses the relative rate
         V_mag_pe = norm3(state%velocity)
         do j = 1, n_passive
-            pe_rate = y(self%passive%effectors(j)%rate_state_index)
+            pe_rate = y(self%passive%effectors(j)%rate_state_index) + dot3(state%omega + self%gust(4:6), self%passive%effectors(j)%hinge_axis)
             if (self%passive%effectors(j)%nondim_rate .and. V_mag_pe > TOLERANCE) then
                 all_vals(n_ctrl + n_passive + j) = pe_rate * self%passive%effectors(j)%ref_length / (2.0 * V_mag_pe)
             else if (.not. self%passive%effectors(j)%nondim_rate) then

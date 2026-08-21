@@ -89,6 +89,7 @@ module vehicle_types_m
         ! rate variable (optional) — makes nondim rate available as DB IV / pool var
         character(len=32) :: rate_variable = ''
         logical :: nondim_rate = .true.  ! true: rate = theta_dot * L_ref / (2V)
+        real :: hinge_axis(3) = 0.0      ! body frame hinge axis (includes projected body rate (absolute rate))
         real :: rate_var_value = 0.0     ! computed rate value for current timestep
         ! driving coefficient — polymorphic model (polynomial or database)
         class(driving_model_t), allocatable :: driving
