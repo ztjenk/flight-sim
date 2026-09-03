@@ -138,10 +138,18 @@ impl ViewFrustum {
 
         // For a plane with normal N passing through point P: N·X + D = 0, where D = -N·P
         // Points are "inside" if N·X + D >= 0
+        //
+        // `right` above is the +90° rotation of `fwd` ([-b, a]), so the wedge runs from
+        // left_dir (fwd rotated -half_fov) to right_dir (fwd rotated +half_fov). Each
+        // boundary's inward normal must therefore point *back toward* fwd:
+        //   - at left_dir  (the -half_fov edge), inward is the +90° rotation: [-b, a]
+        //   - at right_dir (the +half_fov edge), inward is the -90° rotation: [b, -a]
+        // These were previously swapped, which negated both normals and pointed the whole
+        // wedge backwards — terrain ahead of the aircraft tested Outside and was culled,
+        // and (because only drawn tiles refresh `last_used`) then aged out of the GPU cache.
 
-        // Left plane: normal points inward (to the right of left_dir)
-        // Right-perpendicular of [a,b] is [b, -a]
-        let left_normal = [left_dir[1], -left_dir[0]];
+        // Left plane: inward normal is the +90° rotation of left_dir
+        let left_normal = [-left_dir[1], left_dir[0]];
         planes[0] = [
             left_normal[0],
             left_normal[1],
@@ -149,9 +157,8 @@ impl ViewFrustum {
             -(left_normal[0] * camera_pos[0] + left_normal[1] * camera_pos[1])
         ];
 
-        // Right plane: normal points inward (to the left of right_dir)
-        // Left-perpendicular of [a,b] is [-b, a]
-        let right_normal = [-right_dir[1], right_dir[0]];
+        // Right plane: inward normal is the -90° rotation of right_dir
+        let right_normal = [right_dir[1], -right_dir[0]];
         planes[1] = [
             right_normal[0],
             right_normal[1],
@@ -223,7 +230,6 @@ impl ViewFrustum {
 
     /// Test if a 2D bounding box (terrain tile) intersects the frustum
     /// margin: extra padding around the tile for early loading
-    #[allow(dead_code)]
     pub fn test_tile_2d(&self, min_x: f64, min_y: f64, max_x: f64, max_y: f64, margin: f64) -> FrustumResult {
         let min_x = min_x - margin;
         let min_y = min_y - margin;
@@ -256,5 +262,52 @@ impl ViewFrustum {
         } else {
             FrustumResult::Intersecting
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const FOV: f64 = std::f64::consts::FRAC_PI_3; // 60 deg
+    const FAR: f64 = 300_000.0;
+
+    /// A small tile straight down the boresight must be visible at every range
+    /// inside the far plane. The inward normals were previously negated, which
+    /// pointed the wedge backwards and culled terrain ahead of the aircraft.
+    #[test]
+    fn tile_straight_ahead_is_visible_at_all_ranges() {
+        for &(fx, fy) in &[(1.0, 0.0), (0.0, 1.0), (-1.0, 0.0), (0.0, -1.0), (0.6, 0.8)] {
+            let f = ViewFrustum::new_simple([0.0, 0.0, 0.0], [fx, fy], FOV, FAR);
+            for d in [500.0, 5_000.0, 50_000.0, 200_000.0] {
+                let (cx, cy) = (fx * d, fy * d);
+                let r = f.test_tile_2d(cx - 100.0, cy - 100.0, cx + 100.0, cy + 100.0, 0.0);
+                assert_ne!(r, FrustumResult::Outside,
+                    "tile {d} ahead of forward ({fx},{fy}) was culled");
+            }
+        }
+    }
+
+    /// The wedge must open forwards: far-field lateral coverage grows with range.
+    #[test]
+    fn wedge_widens_ahead_not_behind() {
+        let f = ViewFrustum::new_simple([0.0, 0.0, 0.0], [0.0, 1.0], FOV, FAR);
+        let width_at = |y: f64| -> i32 {
+            (-60..=60).filter(|i| {
+                let x = *i as f64 * 1000.0;
+                f.test_tile_2d(x - 50.0, y - 50.0, x + 50.0, y + 50.0, 0.0) != FrustumResult::Outside
+            }).count() as i32
+        };
+        assert!(width_at(60_000.0) > width_at(20_000.0), "wedge should widen ahead");
+        assert!(width_at(20_000.0) > width_at(-20_000.0), "wedge should not open behind");
+    }
+
+    /// Something well outside the wedge still has to be culled - the fix must not
+    /// simply make everything visible.
+    #[test]
+    fn tile_behind_is_culled() {
+        let f = ViewFrustum::new_simple([0.0, 0.0, 0.0], [0.0, 1.0], FOV, FAR);
+        let r = f.test_tile_2d(-100.0, -80_000.0, 100.0, -79_800.0, 0.0);
+        assert_eq!(r, FrustumResult::Outside, "tile far behind should be culled");
     }
 }
