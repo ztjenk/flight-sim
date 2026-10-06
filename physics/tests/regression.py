@@ -9,7 +9,7 @@
 #   python3 regression.py  # direct
 #
 # What it does:
-#   1. builds the engine (make -C ../src) and the three pure-Fortran asserts
+#   1. builds the engine (make -C ../src) and the four pure-Fortran asserts
 #   2. runs each Fortran assert (nonzero exit == FAIL)
 #   3. runs 'flightsim F16regression.json' (short trim + linearization + 2-step sim)
 #   4. diffs the exported A/B CSVs against tests/golden/ at rel 1e-8
@@ -39,13 +39,13 @@ RESID_ATOL = 1.0e-12        # so compare with a generous band; the hard gate is
                             # "converged below solver tolerance" (checked separately)
 SOLVER_TOL = 1.0e-14        # matches the config's trim solver tolerance
 
-FASSERTS = ["test_inertia_rotate", "test_quat_euler", "test_atmosphere"]
+FASSERTS = ["test_inertia_rotate", "test_quat_euler", "test_atmosphere", "test_units"]
 
 # Fortran flags mirror the engine build (all reals double via -fdefault-real-8).
 FFLAGS = ["-fdefault-real-8", "-ffree-line-length-512", "-I", OBJ]
 # objects the asserts link against (already built by the engine build)
 ASSERT_OBJS = [os.path.join(OBJ, o) for o in
-               ("constants_m.o", "math_m.o", "atmosphere_m.o")]
+               ("constants_m.o", "math_m.o", "atmosphere_m.o", "units_m.o")]
 
 GREEN, RED, RESET = "\033[32m", "\033[31m", "\033[0m"
 

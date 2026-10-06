@@ -1,6 +1,9 @@
 # ---- Developer docs (internal roadmap + design notes; not shipped) ----
 dev_docs/
 
+# ---- Claude info on repo
+CLAUDE.md
+
 # ---- Rust (graphics) ----
 graphics/target/
 target/

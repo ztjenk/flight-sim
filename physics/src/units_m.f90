@@ -30,35 +30,38 @@ module units_m
     real, parameter :: r2d = 180.0 / PI
 
     ! base-unit factors: how many external units make one internal unit
+    ! (x_external = x_internal * factor). Built from exact definitions:
+    ! 1 ft = 0.3048 m, 1 lbf = 4.4482216152605 N, 1 nmi = 1852 m, 1 hp = 550 lbf*ft/s
     ! lengths per foot
-    real, parameter :: c_mile = 1.0/5280.0, c_yard = 1.0/3.0, c_inch = 12.0, &
-                       c_nmi  = 1.0/6076.11549, c_meter = 0.3048
+    real, parameter :: c_mile = 1.0/5280.0, c_yard = 1.0/3.0, c_inch = 12.0, c_meter = 0.3048
+    real, parameter :: c_nmi  = c_meter/1852.0
     ! times per second
     real, parameter :: c_min = 1.0/60.0, c_hr = c_min/60.0, c_day = c_hr/24.0, &
                        c_wk = c_day/7.0, c_yr = c_wk/52.0
-    ! speed per ft/s, acceleration per ft/s^2
-    real, parameter :: c_kts = 1.0/1.68781
+    ! speed per ft/s (1 kt = 1852 m/hr), acceleration per ft/s^2
+    real, parameter :: c_kts = c_meter*3600.0/1852.0
     real, parameter :: c_gs  = 1.0/32.174048556430442
-    ! masses per slug
-    real, parameter :: c_gram = 14.5939029 / 1.0e-3
+    ! force per lbf
+    real, parameter :: c_newton = 4.4482216152605
+    ! masses per slug (1 slug = 1 lbf*s^2/ft)
+    real, parameter :: c_gram = 1.0e3*c_newton/c_meter
     real, parameter :: c_lbm  = 32.17404855643
     real, parameter :: c_oz   = 16.0 * c_lbm
     real, parameter :: c_ton  = (1.0/2000.0) * c_lbm
-    ! force per lbf, moment/energy per lbf*ft
-    real, parameter :: c_newton = 4.4482216152605
-    real, parameter :: c_joule  = 1.35582
-    ! power per lbf*ft/s
-    real, parameter :: c_hp   = 550.0
-    real, parameter :: c_watt = 735.499 * c_hp
-    ! temperature delta per delta-F
-    real, parameter :: c_Cdeg = 9.0/5.0
-    ! pressures per psf
-    real, parameter :: c_pascal = 47.880258
+    ! moment/energy per lbf*ft
+    real, parameter :: c_joule  = c_newton*c_meter
+    ! power per lbf*ft/s (1 W = 1 J/s)
+    real, parameter :: c_hp   = 1.0/550.0
+    real, parameter :: c_watt = c_joule
+    ! temperature delta per delta-F (a 1 F change is a 5/9 C change)
+    real, parameter :: c_Cdeg = 5.0/9.0
+    ! pressures per psf (1 mmHg = 133.322387415 Pa, 1 inHg = 25.4 mmHg)
+    real, parameter :: c_pascal = c_newton/c_meter**2
     real, parameter :: c_psi    = 1.0/144.0
-    real, parameter :: c_atm    = 47.880258/101325.0
-    real, parameter :: c_inHg   = 47.880258/3386.389
-    real, parameter :: c_mbar   = 47.880258/100.0
-    real, parameter :: c_mmHg   = 47.880258/133.322
+    real, parameter :: c_atm    = c_pascal/101325.0
+    real, parameter :: c_inHg   = c_pascal/(25.4*133.322387415)
+    real, parameter :: c_mbar   = c_pascal/100.0
+    real, parameter :: c_mmHg   = c_pascal/133.322387415
     ! rotation rate per rad/s
     real, parameter :: c_rpm = 60.0/(2.0*PI)
 
